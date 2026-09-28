@@ -1,0 +1,260 @@
+{
+ "seasons": [
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "pairs": [
+  {
+   "a": "QB",
+   "b": "WR1",
+   "kind": "Same team",
+   "r": 0.401,
+   "n": 2699,
+   "ci": 0.032
+  },
+  {
+   "a": "QB",
+   "b": "WR2",
+   "kind": "Same team",
+   "r": 0.281,
+   "n": 2694,
+   "ci": 0.035
+  },
+  {
+   "a": "QB",
+   "b": "TE",
+   "kind": "Same team",
+   "r": 0.264,
+   "n": 2689,
+   "ci": 0.035
+  },
+  {
+   "a": "QB",
+   "b": "RB1",
+   "kind": "Same team",
+   "r": 0.069,
+   "n": 2699,
+   "ci": 0.038
+  },
+  {
+   "a": "QB",
+   "b": "K",
+   "kind": "Same team",
+   "r": 0.06,
+   "n": 2683,
+   "ci": 0.038
+  },
+  {
+   "a": "RB1",
+   "b": "K",
+   "kind": "Same team",
+   "r": 0.149,
+   "n": 2700,
+   "ci": 0.037
+  },
+  {
+   "a": "RB1",
+   "b": "DST",
+   "kind": "Same team",
+   "r": 0.061,
+   "n": 2717,
+   "ci": 0.037
+  },
+  {
+   "a": "QB",
+   "b": "DST",
+   "kind": "Same team",
+   "r": -0.089,
+   "n": 2700,
+   "ci": 0.037
+  },
+  {
+   "a": "WR1",
+   "b": "WR2",
+   "kind": "Same team",
+   "r": 0.067,
+   "n": 2711,
+   "ci": 0.037
+  },
+  {
+   "a": "WR1",
+   "b": "TE",
+   "kind": "Same team",
+   "r": 0.021,
+   "n": 2705,
+   "ci": 0.038
+  },
+  {
+   "a": "RB1",
+   "b": "RB2",
+   "kind": "Same team",
+   "r": 0.062,
+   "n": 2680,
+   "ci": 0.038
+  },
+  {
+   "a": "RB1",
+   "b": "WR1",
+   "kind": "Same team",
+   "r": -0.031,
+   "n": 2716,
+   "ci": 0.038
+  },
+  {
+   "a": "K",
+   "b": "DST",
+   "kind": "Same team",
+   "r": 0.261,
+   "n": 2701,
+   "ci": 0.035
+  },
+  {
+   "a": "QB",
+   "b": "OPP_QB",
+   "kind": "Opponent",
+   "r": 0.183,
+   "n": 2682,
+   "ci": 0.037
+  },
+  {
+   "a": "WR1",
+   "b": "OPP_WR1",
+   "kind": "Opponent",
+   "r": 0.112,
+   "n": 2716,
+   "ci": 0.037
+  },
+  {
+   "a": "QB",
+   "b": "OPP_WR1",
+   "kind": "Opponent",
+   "r": 0.109,
+   "n": 2700,
+   "ci": 0.037
+  },
+  {
+   "a": "RB1",
+   "b": "OPP_RB1",
+   "kind": "Opponent",
+   "r": -0.037,
+   "n": 2716,
+   "ci": 0.038
+  },
+  {
+   "a": "DST",
+   "b": "OPP_QB",
+   "kind": "Opponent",
+   "r": -0.363,
+   "n": 2700,
+   "ci": 0.033
+  },
+  {
+   "a": "DST",
+   "b": "OPP_WR1",
+   "kind": "Opponent",
+   "r": -0.166,
+   "n": 2717,
+   "ci": 0.037
+  },
+  {
+   "a": "DST",
+   "b": "OPP_RB1",
+   "kind": "Opponent",
+   "r": -0.228,
+   "n": 2717,
+   "ci": 0.036
+  },
+  {
+   "a": "DST",
+   "b": "OPP_K",
+   "kind": "Opponent",
+   "r": -0.3,
+   "n": 2701,
+   "ci": 0.034
+  },
+  {
+   "a": "K",
+   "b": "OPP_K",
+   "kind": "Opponent",
+   "r": -0.121,
+   "n": 2684,
+   "ci": 0.037
+  },
+  {
+   "a": "DST",
+   "b": "OPP_TE",
+   "kind": "Opponent",
+   "r": -0.052,
+   "n": 2706,
+   "ci": 0.038
+  }
+ ],
+ "market_effects": {
+  "QB": {
+   "per_implied_pt": 0.896,
+   "per_spread_pt_holding_implied": -0.127,
+   "r2": 0.127,
+   "n": 2714
+  },
+  "RB1": {
+   "per_implied_pt": 0.341,
+   "per_spread_pt_holding_implied": 0.037,
+   "r2": 0.035,
+   "n": 2718
+  },
+  "WR1": {
+   "per_implied_pt": 0.704,
+   "per_spread_pt_holding_implied": -0.163,
+   "r2": 0.055,
+   "n": 2718
+  },
+  "TE": {
+   "per_implied_pt": 0.332,
+   "per_spread_pt_holding_implied": -0.044,
+   "r2": 0.026,
+   "n": 2711
+  },
+  "K": {
+   "per_implied_pt": 0.037,
+   "per_spread_pt_holding_implied": 0.089,
+   "r2": 0.021,
+   "n": 2712
+  },
+  "DST": {
+   "per_implied_pt": -0.319,
+   "per_spread_pt_holding_implied": 0.39,
+   "r2": 0.087,
+   "n": 2718
+  }
+ },
+ "rb1_ppr_by_spread": {
+  "Dog 7+": 12.43,
+  "Dog 3-7": 13.42,
+  "Pick'em": 14.78,
+  "Fav 3-7": 16.18,
+  "Fav 7+": 16.2
+ },
+ "target_leader_absent": {
+  "RB": {
+   "share_with": 0.11,
+   "share_without": 0.119,
+   "lift_pct": 8.0,
+   "n": 37
+  },
+  "TE": {
+   "share_with": 0.131,
+   "share_without": 0.136,
+   "lift_pct": 3.9,
+   "n": 50
+  },
+  "WR": {
+   "share_with": 0.144,
+   "share_without": 0.171,
+   "lift_pct": 18.5,
+   "n": 100
+  }
+ }
+}
