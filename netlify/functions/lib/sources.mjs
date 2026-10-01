@@ -1,4 +1,5 @@
-import { cached, getText, getJson, freshness } from "./util.mjs";
+import { cached, getText, getJson, freshness, normName } from "./util.mjs";
+import { checkEcr, checkInjuries, checkProjections } from "./shape.mjs";
 import { parseCsv, schedule } from "./schedule.mjs";
 import { abbr } from "./teams.mjs";
 import { loadPlayers } from "../players.mjs";
@@ -21,17 +22,28 @@ export async function fpIds() {
 }
 
 async function rawEcr() {
-  return cached("ecr-v2", 45 * 60e3, async () => {
-    const [csv, ids] = await Promise.all([getText(`${RAW}/fp_latest_weekly.csv`), fpIds()]);
-    const players = {}; let scraped = null;
-    for (const r of parseCsv(csv)) {
-      if (!["QB", "RB", "WR", "TE", "K"].includes(r.pos)) continue;
-      const sid = ids[r.fantasypros_id]; const e = numOrNull(r.ecr); if (!sid || e == null) continue;
-      scraped = na(r.scrape_date) || scraped;
+  return cached("ecr-v3", 45 * 60e3, async () => {
+    const [csv, ids, roster] = await Promise.all([getText(`${RAW}/fp_latest_weekly.csv`), fpIds(), loadPlayers().catch(() => ({}))]);
+    // The id table misses a few kickers, so those are matched by name and team. Defenses have no id
+    // at all: Sleeper's id for a defense is its team abbreviation, so they are matched by team.
+    const byNameTeam = {};
+    for (const [id, p] of Object.entries(roster)) if (p.p === "K" && p.t) (byNameTeam[`${normName(p.n)}|${p.t}`] ||= []).push(id);
+    const rows = parseCsv(csv), cols = Object.keys(rows[0] || {});
+    const players = {}, counts = {}, stats = {}, unmapped = { K: [], DST: [] }; let scraped = null;
+    for (const r of rows) {
+      const pos = r.pos; counts[pos] = (counts[pos] || 0) + 1;
+      if (!["QB", "RB", "WR", "TE", "K", "DST"].includes(pos)) continue;
+      const e = numOrNull(r.ecr); if (e == null) continue;
+      const team = abbr(r.team);
+      let sid = pos === "DST" ? (roster[team]?.p === "DEF" ? team : null) : ids[r.fantasypros_id];
+      if (!sid && pos === "K") { const hit = byNameTeam[`${normName(r.player_name)}|${team}`]; if (hit?.length === 1) sid = hit[0]; }
+      const st = (stats[pos] ||= { rows: 0, mapped: 0 }); st.rows++;
+      if (!sid) { unmapped[pos]?.push(r.player_name); continue; }
+      st.mapped++; scraped = na(r.scrape_date) || scraped;
       players[sid] = { e, sd: numOrNull(r.sd), b: numOrNull(r.best), w: numOrNull(r.worst), o: numOrNull(r.player_owned_avg), g: na(r.start_sit_grade),
-        t: abbr(r.team), ts: numOrNull(r.player_game_kickoff_ts) };
+        t: team, ts: numOrNull(r.player_game_kickoff_ts) };
     }
-    return { fetchedAt: Date.now(), scraped, players };
+    return { fetchedAt: Date.now(), scraped, players, stats, unmapped, shape: checkEcr(cols, counts, scraped) };
   });
 }
 
@@ -46,7 +58,7 @@ export async function loadEcr(games) {
     if (p.ts && Math.abs(p.ts * 1000 - kick[p.t]) <= 15 * 60e3) hit++;
   }
   const ok = total > 0 && hit / total >= 0.5;
-  return { status: ok ? "ok" : "not-yet", scraped: d.scraped, asOf: d.fetchedAt, match: total ? +(hit / total).toFixed(2) : 0, players: ok ? d.players : {} };
+  return { status: ok ? "ok" : "not-yet", scraped: d.scraped, asOf: d.fetchedAt, match: total ? +(hit / total).toFixed(2) : 0, players: ok ? d.players : {}, stats: d.stats, unmapped: d.unmapped, shape: d.shape };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -55,14 +67,14 @@ export async function loadEcr(games) {
 const KEEP = ["pass_yd", "pass_td", "pass_int", "pass_att", "pass_cmp", "pass_2pt", "rush_yd", "rush_td", "rush_att", "rush_2pt", "rec", "rec_yd", "rec_td", "rec_2pt",
   "fum_lost", "fgm", "fgm_0_19", "fgm_20_29", "fgm_30_39", "fgm_40_49", "fgm_50p", "xpm", "fgmiss", "xpmiss", "pts_ppr"];
 export async function sleeperProj(season, week) {
-  return cached(`sl-proj-${season}-${week}`, 30 * 60e3, async () => {
+  return cached(`sl-proj2-${season}-${week}`, 30 * 60e3, async () => {
     const pos = ["QB", "RB", "WR", "TE", "K"].map((p) => `position[]=${p}`).join("&");
     const urls = [`https://api.sleeper.com/projections/nfl/${season}/${week}?season_type=regular&${pos}&order_by=pts_ppr`,
       `https://api.sleeper.app/v1/projections/nfl/regular/${season}/${week}`];
-    const players = await loadPlayers();
+    const players = await loadPlayers(); let shape = null;
     for (const u of urls) {
       try {
-        const d = await getJson(u);
+        const d = await getJson(u); shape = checkProjections(d);
         const rows = Array.isArray(d) ? d.map((x) => [String(x.player_id), x.stats]) : Object.entries(d || {});
         const out = {};
         for (const [id, st] of rows) {
@@ -72,10 +84,10 @@ export async function sleeperProj(season, week) {
           if (players[id].p !== "K" && !(ppr >= 1)) continue;
           s.ppr = +(+ppr).toFixed(2); out[id] = s;
         }
-        if (Object.keys(out).length > 20) return { fetchedAt: Date.now(), players: out };
+        if (Object.keys(out).length > 20) return { fetchedAt: Date.now(), players: out, shape };
       } catch {}
     }
-    return { fetchedAt: Date.now(), players: {}, error: "Sleeper projections unavailable" };
+    return { fetchedAt: Date.now(), players: {}, error: "Sleeper projections unavailable", shape };
   });
 }
 
@@ -83,20 +95,20 @@ export async function sleeperProj(season, week) {
 // Official injury reports (nflverse republishes them through the week)
 // ---------------------------------------------------------------------------------------------
 export async function loadInjuries(season, week) {
-  const all = await cached(`inj-${season}`, 30 * 60e3, async () => {
+  const all = await cached(`inj3-${season}`, 30 * 60e3, async () => {
     const csv = await getText(`${NFLV}/injuries/injuries_${season}.csv`);
     const players = await loadPlayers(); const g2s = {};
     for (const [id, p] of Object.entries(players)) if (p.g) g2s[p.g] = id;
-    const byWeek = {};
-    for (const r of parseCsv(csv)) {
+    const byWeek = {}, rows = parseCsv(csv), shape = checkInjuries(Object.keys(rows[0] || {}));
+    for (const r of rows) {
       const sid = g2s[r.gsis_id]; if (!sid || !["QB", "RB", "WR", "TE", "K"].includes(r.position)) continue;
       const practice = /Did Not/.test(r.practice_status) ? "DNP" : /Limited/.test(r.practice_status) ? "Limited" : /Full/.test(r.practice_status) ? "Full" : null;
       (byWeek[r.week] ||= {})[sid] = { s: na(r.report_status), p: practice, i: na(r.report_primary_injury) || na(r.practice_primary_injury) };
     }
-    return { fetchedAt: Date.now(), byWeek };
+    return { fetchedAt: Date.now(), byWeek, shape };
   });
   const wk = all.byWeek[week];
-  return { status: wk ? "ok" : "not-yet", asOf: all.fetchedAt, players: wk || {} };
+  return { status: wk ? "ok" : "not-yet", asOf: all.fetchedAt, players: wk || {}, shape: all.shape };
 }
 
 // ---------------------------------------------------------------------------------------------

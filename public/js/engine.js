@@ -53,7 +53,7 @@ export function buildProjections(ctx, league) {
     if (p.p === "DEF") {
       const st = defenseStats(c?.imp, c?.oppImp, c?.spread ?? 0);
       const mean = st && !bye ? points(st, s, "DEF") : 0, [a, b] = STUDY.volatility.DEF;
-      out[id] = { ...base, mean: +mean.toFixed(2), ppr: mean, lscale: 1, sd: Math.max(1, a + b * mean), kind: st ? "lines" : "none", src: bye ? "bye" : st ? "lines" : "none", status: null, cons: null, experts: null, model: null, sleeper: null, parts: null };
+      out[id] = { ...base, mean: +mean.toFixed(2), ppr: mean, lscale: 1, sd: Math.max(1, a + b * mean), kind: st ? "lines" : "none", src: bye ? "bye" : st ? "lines" : "none", status: null, cons: null, experts: null, model: null, sleeper: null, parts: null, ecr: feed?.ecr?.players?.[id] || null };
       continue;
     }
     if (p.p === "K") {

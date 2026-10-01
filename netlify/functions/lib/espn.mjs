@@ -1,5 +1,6 @@
 import { getJson } from "./util.mjs";
 import { abbr } from "./teams.mjs";
+import { checkEspn } from "./shape.mjs";
 
 // ESPN's public scoreboard: schedule, live scores, DraftKings lines (open and current), weather, venue.
 // Undocumented but keyless. Once a game is final ESPN drops its odds, so finished games get their
@@ -46,7 +47,7 @@ export async function scoreboard({ week, dates } = {}) {
   if (dates) qs.set("dates", dates);
   const d = await getJson(`${BASE}?${qs}`);
   const games = (d.events || []).map(parseEvent).filter(Boolean);
-  return { week: d.week?.number ?? games[0]?.week ?? null, season: d.season?.year ?? null, games };
+  return { week: d.week?.number ?? games[0]?.week ?? null, season: d.season?.year ?? null, games, shape: checkEspn(d, games) };
 }
 
 // The week people care about: the first one that still has an unfinished game.

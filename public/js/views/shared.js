@@ -11,7 +11,8 @@ export function pulse(feed) {
   if (!feed) return "";
   const src = feed.sources || [];
   const waiting = src.filter((s) => s.status === "missing" || s.status === "stale").length;
-  const label = waiting ? `${waiting} of ${src.length} sources waiting` : `Live data, checked ${agoShort(feed.fetchedAt)} ago`;
+  const broken = src.filter((s) => s.status === "broken").length;
+  const label = broken ? `${broken} source${broken > 1 ? "s" : ""} changed format` : waiting ? `${waiting} of ${src.length} sources waiting` : `Live data, checked ${agoShort(feed.fetchedAt)} ago`;
   return `<details class="pulse"><summary><span class="pdots" aria-hidden="true">${src.map((s) => `<i class="${s.status}"></i>`).join("")}</span>${esc(label)}</summary>
     <div class="plist">${src.map((s) => `<div class="pr"><i class="${s.status}"></i><div>${esc(s.label)}<small>${esc(s.note)}</small></div><time>${s.asOf ? agoShort(s.asOf) : "waiting"}</time></div>`).join("")}
     <div class="pr"><i class="${S.usage ? "fresh" : "missing"}"></i><div>Game logs<small>${S.usage ? `Through week ${S.usage.throughWeek}, nflverse` : "Not loaded"}</small></div><time>${S.usage ? agoShort(S.usage.asOf) : "waiting"}</time></div></div></details>`;
