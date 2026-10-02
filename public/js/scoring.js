@@ -71,6 +71,18 @@ export const SLOT_ELIG = {
 };
 export const SLOT_LABEL = { FLEX: "Flex", WRRB_FLEX: "W/R", REC_FLEX: "W/T", SUPER_FLEX: "SF", DEF: "DST" };
 
+// Which position tabs a league should show. A position appears only if some starting slot can use it, so a
+// league without a kicker or defense never sees those tabs. "FLEX" appears when any slot takes more than one position.
+export const FLEX_POS = ["RB", "WR", "TE"];
+export const usablePositions = (slots) => new Set(slots.flatMap((s) => SLOT_ELIG[s] || []));
+export function positionsFor(slots) {
+  const usable = usablePositions(slots), list = ["ALL", ...["QB", "RB", "WR", "TE"].filter((p) => usable.has(p))];
+  if (slots.some((s) => (SLOT_ELIG[s] || []).length > 1)) list.push("FLEX");
+  for (const p of ["K", "DEF"]) if (usable.has(p)) list.push(p);
+  return list;
+}
+export const inPosition = (pos, selected) => selected === "ALL" || (selected === "FLEX" ? FLEX_POS.includes(pos) : pos === selected);
+
 export const ROSTER_PRESETS = {
   standard: { label: "Standard (1QB, 2RB, 2WR, TE, Flex, K, DST)", slots: ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"], bench: 6 },
   threeWr: { label: "3 WR (1QB, 2RB, 3WR, TE, Flex, K, DST)", slots: ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "K", "DEF"], bench: 6 },

@@ -9,7 +9,7 @@ export const axisMax = (prs, floor = 30) => Math.max(floor, Math.ceil((Math.max(
 
 // ---------- Quantile dotplot: 20 dots, each one is a 1-in-20 outcome (5% of games) ----------
 export const DOT = { W: 320, padL: 10, padR: 10, r: 5.6 };
-export function dotplot(pr, { max, threshold = null, tone = "us", id = "dp", name = "", all = false } = {}) {
+export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name = "", all = false } = {}) {
   const { W, padL, padR, r } = DOT, d = 2 * r + 1.2;
   const vals = dotsOf(pr.mean, pr.sd, 20);
   const xs = (v) => padL + Math.max(0, Math.min(1, v / max)) * (W - padL - padR);
@@ -24,49 +24,50 @@ export function dotplot(pr, { max, threshold = null, tone = "us", id = "dp", nam
     if (big) ticks += `<text class="ax" x="${x}" y="${axisY + 22}" text-anchor="middle">${v}</text>`;
   }
   const on = (v) => all || (threshold != null && v >= threshold);
-  const circles = placed.map((p) => `<circle class="dot ${tone}${on(p.v) ? " on" : ""}" data-v="${p.v.toFixed(2)}" cx="${p.x.toFixed(1)}" cy="${(axisY - 4.5 - r - p.lvl * d).toFixed(1)}" r="${r}" style="--i:${p.i}"/>`).join("");
+  const circles = placed.map((p) => `<circle class="dot${on(p.v) ? " on" : ""}" data-v="${p.v.toFixed(2)}" cx="${p.x.toFixed(1)}" cy="${(axisY - 4.5 - r - p.lvl * d).toFixed(1)}" r="${r}" style="--i:${p.i}"/>`).join("");
   const tx = threshold != null ? xs(threshold) : -20;
-  return `<svg class="dotplot" id="${id}" viewBox="0 0 ${W} ${H}" role="img" data-max="${max}" data-w="${W}" data-pl="${padL}" data-pr="${padR}" data-cap="${id}-cap" data-name="${esc(name)}"
+  return `<svg class="dotplot" id="${id}" ${color ? `style="--c:${color}" ` : ""}viewBox="0 0 ${W} ${H}" role="img" data-max="${max}" data-w="${W}" data-pl="${padL}" data-pr="${padR}" data-cap="${id}-cap" data-name="${esc(name)}"
     aria-label="Twenty dots. Each dot is one of twenty equally likely outcomes for ${esc(name)}, from ${f1(vals[0])} to ${f1(vals[19])} points.">
     <line class="axis" x1="${padL}" x2="${W - padR}" y1="${axisY}" y2="${axisY}"/>${ticks}${circles}
     <g class="thr" style="transform:translateX(${tx}px)"><line x1="0" x2="0" y1="2" y2="${axisY}"/><path d="M-6 ${axisY + 1} L6 ${axisY + 1} L0 ${axisY - 8} Z"/></g>
     <rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent"/></svg>`;
 }
 export const dotCount = (pr, thr) => dotsOf(pr.mean, pr.sd, 20).filter((v) => v >= thr).length;
-export function dotCaption(pr, thr, who = "He") {
-  const n = dotCount(pr, thr);
-  return `In <b>${n} of 20</b> games ${esc(who)} scores <b>${f0(thr)}+</b> points.`;
+// The caption under the dotplot: a plain sentence plus the chance, shaded on the red-to-green scale.
+export function capHtml(n, who, thr) {
+  const c = chanceColor(n / 20);
+  return `In <b>${n} of 20</b> games ${esc(who)} scores <b>${f0(thr)}+</b> points. <span class="pcchip" style="background:${c};color:${inkFor(c)}">${Math.round((n / 20) * 100)}%</span>`;
 }
+export const dotCaption = (pr, thr, who = "He") => capHtml(dotCount(pr, thr), who, thr);
 
-// ---------- Compact range ribbon for lists (same ruler, shared scale so rows compare) ----------
-export function ribbon(pr, { max = 40, tone = "us" } = {}) {
-  const n = max / 10, at = (v) => (Math.max(0, Math.min(max, v)) / max) * 100;
-  if (!pr || !(pr.mean > 0)) return `<span class="rib" style="--n:${n}" role="img" aria-label="No projection"></span>`;
-  const lo = quantile(pr.mean, pr.sd, 0.1), hi = quantile(pr.mean, pr.sd, 0.9), md = quantile(pr.mean, pr.sd, 0.5);
-  return `<span class="rib ${tone}" style="--n:${n};--lo:${at(lo).toFixed(1)}%;--w:${Math.max(2.5, at(hi) - at(lo)).toFixed(1)}%;--md:${at(md).toFixed(1)}%" role="img" aria-label="Likely range ${f0(lo)} to ${f0(hi)} points, typical ${f0(md)}"><i class="band"></i><i class="med"></i></span>`;
+// ---------- One red-to-green scale for every chance ----------
+// Red is a long shot, yellow is a coin flip, green is a lock. Red is darker than green so the two stay apart for
+// color-blind viewers, and the number is always printed next to the shade.
+const SCALE = ["#b3302a", "#e9803a", "#f1cb4a", "#9ec45f", "#4db874"];
+const hx = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+export function chanceColor(t) {
+  t = Math.max(0, Math.min(1, t)); const x = t * (SCALE.length - 1), i = Math.min(Math.floor(x), SCALE.length - 2), f = x - i, a = hx(SCALE[i]), b = hx(SCALE[i + 1]);
+  return "#" + a.map((v, k) => Math.round(v + (b[k] - v) * f).toString(16).padStart(2, "0")).join("");
 }
+export const inkFor = (h) => { const c = hx(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }), L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return (L + 0.05) / 0.0556 >= 1.05 / (L + 0.05) ? "#111111" : "#ffffff"; };
+const BALL = `<svg viewBox="0 0 40 24" width="34" height="20" aria-hidden="true"><ellipse cx="20" cy="12" rx="17" ry="9.5" transform="rotate(-14 20 12)" fill="#8a4620" stroke="#2b1206" stroke-width="1.6"/><path d="M11 14l17-6M15 9.5l1.8 6M19.5 8l1.8 6M24 6.8l1.8 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`;
 
-// ---------- The drive: win probability as field position ----------
+// ---------- The field: win probability as field position ----------
 export function drive(win, { you = "You", foe = "Opponent" } = {}) {
-  const W = 360, H = 132, ez = 24, x0 = ez, span = W - 2 * ez, bx = x0 + win * span, mid = x0 + span / 2;
-  let g = "";
-  for (let i = 0; i < 10; i++) g += `<rect x="${x0 + (i * span) / 10}" y="0" width="${span / 10}" height="${H}" fill="#fff" opacity="${i % 2 ? 0.045 : 0}"/>`;
-  for (let y = 0; y <= 100; y += 2) {
-    const x = x0 + (y / 100) * span, big = y % 10 === 0;
-    if (big) g += `<line x1="${x}" x2="${x}" y1="0" y2="${H}" stroke="#fff" stroke-width="${y === 50 ? 2.4 : 1.6}" opacity="${y === 0 || y === 100 ? 0.9 : 0.5}"/>`;
-    else { g += `<line x1="${x}" x2="${x}" y1="0" y2="5" stroke="#fff" stroke-width="1" opacity=".42"/><line x1="${x}" x2="${x}" y1="${H - 5}" y2="${H}" stroke="#fff" stroke-width="1" opacity=".42"/>`; }
-  }
-  const nums = [10, 20, 30, 40, 50, 40, 30, 20, 10];
-  nums.forEach((n, i) => { const x = x0 + ((i + 1) / 10) * span; g += `<text class="yd" x="${x}" y="34" text-anchor="middle">${n}</text><text class="yd" x="${x}" y="${H - 15}" text-anchor="middle">${n}</text>`; });
-  const short = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
-  const dx = mid - bx;
-  return `<svg class="drive" viewBox="0 0 ${W} ${H}" role="img" aria-label="${you} has a ${Math.round(win * 100)} percent chance to win against ${esc(foe)}. The ball sits ${Math.round(win * 100)} yards from your goal line.">
-    <rect class="ez you" x="0" y="0" width="${ez}" height="${H}"/><rect class="ez foe" x="${W - ez}" y="0" width="${ez}" height="${H}"/>${g}
-    <text class="ezt" transform="translate(${ez / 2 + 4} ${H / 2}) rotate(-90)" text-anchor="middle">${esc(short(you.toUpperCase(), 13))}</text>
-    <text class="ezt" transform="translate(${W - ez / 2 + 4} ${H / 2}) rotate(90)" text-anchor="middle">${esc(short(foe.toUpperCase(), 13))}</text>
-    <g transform="translate(${bx.toFixed(1)} ${H / 2 - 4})"><g class="ball" style="--dx:${dx.toFixed(1)}px">
-      <ellipse class="shadow" cx="1" cy="15" rx="14" ry="3"/><ellipse class="pig" cx="0" cy="0" rx="15" ry="9.4" transform="rotate(-8)"/>
-      <path class="lace" d="M-6 -2.4 L6 -3.6 M-3.5 -4.4 V-0.6 M0 -4.9 V-1.1 M3.5 -5.3 V-1.6"/><path class="stripe" d="M-9.5 -4.5 Q-10.6 -0.5 -9.4 3.2 M9.5 -6 Q10.6 -2 9.4 1.8"/></g></g></svg>`;
+  const p = Math.round(win * 100), col = chanceColor(win);
+  return `<div class="field-w" role="img" aria-label="${esc(you)} has a ${p} percent chance to win against ${esc(foe)}. The ball sits ${p} yards from your goal line.">
+    <div class="fbar"><span class="win" style="width:${p}%;background:${col};color:${inkFor(col)}">${esc(you)} ${p}%</span><span class="lose">${100 - p}%</span><span class="ball" style="left:${p}%">${BALL}</span></div>
+    <div class="yards" aria-hidden="true">${[10, 20, 30, 40, 50, 40, 30, 20, 10].map((n) => `<i>${n}</i>`).join("")}</div></div>`;
+}
+
+// ---------- The range in everyday words: a bad week, the average, a great week ----------
+export function rangeBar(pr, { max = 55 } = {}) {
+  const lo = Math.max(0, quantile(pr.mean, pr.sd, 0.1)), hi = quantile(pr.mean, pr.sd, 0.9), mid = pr.mean;
+  const at = (v) => (Math.max(0, Math.min(max, v)) / max) * 100;
+  const lab = (v, text, val) => `<div class="lab" style="left:clamp(34px, ${at(v).toFixed(1)}%, calc(100% - 34px))"><b>${val}</b>${text}</div>`;
+  return `<div class="rng2" role="img" aria-label="Most weeks scores between ${f0(lo)} and ${f0(hi)} points, averaging ${f1(mid)}">
+    <div class="trk"></div><div class="fill" style="left:${at(lo).toFixed(1)}%;width:${Math.max(2, at(hi) - at(lo)).toFixed(1)}%"></div><div class="mid" style="left:${at(mid).toFixed(1)}%"></div>
+    ${lab(lo, "bad week", f0(lo))}${lab(mid, "average", f1(mid))}${lab(hi, "great week", f0(hi))}</div>`;
 }
 
 // ---------- Waterfall: how the number is built (plain HTML so it wraps well on phones) ----------
@@ -107,7 +108,7 @@ export function slateMap(games) {
   for (let t = Math.ceil(lo / 5) * 5; t <= hi; t += 5) a += `<line class="gl" x1="${X(t)}" x2="${X(t)}" y1="${T}" y2="${H - B}"/><text class="ax" x="${X(t)}" y="${H - B + 15}" text-anchor="middle">${t}</text>`;
   for (let m = 0; m <= mx; m += 3) a += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(m)}" y2="${Y(m)}"/><text class="ax" x="${L - 6}" y="${Y(m) + 3}" text-anchor="end">${m}</text>`;
   const q = (x, y, t, anchor) => `<text class="quad" x="${x}" y="${y}" text-anchor="${anchor}">${t}</text>`;
-  const R_ = 12.5, P_ = G.map((g) => ({ g, x: X(g.line.total), y: Y(Math.abs(g.line.spread)) }));
+  const R_ = 14.5, P_ = G.map((g) => ({ g, x: X(g.line.total), y: Y(Math.abs(g.line.spread)) }));
   const home_ = P_.map((p) => ({ x: p.x, y: p.y }));
   for (let it = 0; it < 80; it++) for (let i = 0; i < P_.length; i++) for (let j = i + 1; j < P_.length; j++) {
     const dx = P_[j].x - P_[i].x, dy = P_[j].y - P_[i].y, d = Math.hypot(dx, dy) || 0.01, min = 2 * R_ + 1;
@@ -135,7 +136,7 @@ export function formStrip(log, xp, { weeks = null } = {}) {
   const gap = (W - L - R) / n;
   const bars = log.map((l, i) => {
     const x = L + i * gap + (gap - bw) / 2, [p, e] = vals[i], top = Y(Math.max(p, 0));
-    return `<rect class="fbar" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5, H - B - top).toFixed(1)}" rx="3"/>
+    return `<rect class="fbar-s" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5, H - B - top).toFixed(1)}" rx="3"/>
       ${e != null ? `<line class="fexp" x1="${(x - 3).toFixed(1)}" x2="${(x + bw + 3).toFixed(1)}" y1="${Y(e).toFixed(1)}" y2="${Y(e).toFixed(1)}"/>` : ""}
       <text class="fv" x="${(x + bw / 2).toFixed(1)}" y="${(top - 3).toFixed(1)}" text-anchor="middle">${f0(p)}</text>
       <text class="ax" x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${l[0]}</text>`;
@@ -166,8 +167,8 @@ export function rankRange(ecr, ours, N = 36) {
 }
 
 // ---------- Mirrored comparison bars (winner solid, loser faded) ----------
-export function mirrorRows(rows) {
-  return `<div class="mirror">${rows.map((r) => {
+export function mirrorRows(rows, { ta = "", tb = "" } = {}) {
+  return `<div class="mirror"${ta ? ` style="--ta:${ta};--tb:${tb}"` : ""}>${rows.map((r) => {
     const a = r.a ?? 0, b = r.b ?? 0, m = Math.max(Math.abs(a), Math.abs(b), 1e-9);
     const better = r.lowerBetter ? (a < b ? "a" : b < a ? "b" : "") : (a > b ? "a" : b > a ? "b" : "");
     return `<div class="mr"><div class="mv a ${better === "a" ? "win" : ""}">${r.fa ?? f1(a)}</div>

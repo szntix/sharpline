@@ -1,4 +1,4 @@
-import { json, fail, sleeper, cached } from "./lib/util.mjs";
+import { json, fail, sleeper, cached, userFromRequest } from "./lib/util.mjs";
 
 // Read-only proxy for the public Sleeper API, limited to the paths the app uses.
 const ALLOWED = [
@@ -12,6 +12,7 @@ const ALLOWED = [
 ];
 
 export default async (req) => {
+  if (!(await userFromRequest(req))) return fail("Sign in to look up Sleeper leagues.", 401);
   const url = new URL(req.url);
   const path = (url.searchParams.get("path") || "").replace(/^\/+/, "");
   if (!ALLOWED.some((r) => r.test(path))) return fail("Path not allowed");

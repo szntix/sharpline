@@ -1,4 +1,5 @@
 // Small shared helpers for every view.
+import { teamColors, logoUrl } from "./teams.js";
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 export const f1 = (x) => (x == null || !isFinite(x) ? "–" : (Math.round(x * 10) / 10).toFixed(1));
 export const f0 = (x) => (x == null || !isFinite(x) ? "–" : Math.round(x).toString());
@@ -31,13 +32,31 @@ export function kickoffText(g) {
   return `${DAYS[d.getDay()]} ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(":00", "")}`;
 }
 
-// Status chip text for a player row
+// Position chip class, and which team color is visible on the current theme.
+const POS_CLASS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", K: "k", DEF: "dst" };
+export const posClass = (p) => POS_CLASS[p] || "neu";
+export const isDark = () => { const t = document.documentElement.dataset.theme; return t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches); };
+export const teamStripe = (abbr) => teamColors(abbr, isDark()).stripe;
+// The team plate: letters on the team color, with the logo laid over them when it loads.
+export function plate(abbr) {
+  const c = teamColors(abbr, isDark()), url = logoUrl(abbr);
+  return `<span class="plate" style="--pl:${c.plate};--pli:${c.plateInk}" aria-hidden="true">${esc(abbr || "FA")}${url ? `<img src="${url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ""}</span>`;
+}
+
+// A small ring that shows how likely a player is to play: full is healthy, empty is out.
+export function ring(f) {
+  const r = 6, c = 2 * Math.PI * r;
+  return `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2.4"/>${f > 0 ? `<circle cx="8" cy="8" r="${r}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="${(f * c).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 8 8)"/>` : ""}</svg>`;
+}
+const RING = { out: 0, doubt: 0.25, q: 0.75, dnp: 0.5 };
+
+// Status chip for a player row: a ring and a short label. The full word is there for screen readers.
 export function statusChip(status, practice) {
   if (!status && practice !== "DNP") return "";
   const s = status || "";
-  const cls = ["Out", "IR", "PUP", "Sus", "NA", "COV"].includes(s) ? "out" : s === "Doubtful" ? "doubt" : "q";
+  const kind = ["Out", "IR", "PUP", "Sus", "NA", "COV"].includes(s) ? "out" : s === "Doubtful" ? "doubt" : s ? "q" : "dnp";
   const label = s === "Questionable" ? "Q" : s === "Doubtful" ? "D" : s === "Out" ? "OUT" : s || "DNP";
-  return `<span class="tag ${cls}" title="${esc(s || "Did not practice")}">${esc(label)}</span>`;
+  return `<span class="chance ${kind === "out" ? "out" : ""}" title="${esc(s || "Did not practice")}">${ring(RING[kind])}<span aria-hidden="true">${esc(label)}</span><span class="sr">${esc(s || "Did not practice")}</span></span>`;
 }
 
 export function toast(msg) {

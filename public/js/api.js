@@ -21,7 +21,7 @@ export async function api(path, { method = "GET", body, auth = true } = {}) {
   return data;
 }
 
-export const sleeperApi = (path, params = {}) => api(`sleeper?${new URLSearchParams({ path, ...params })}`, { auth: false });
+export const sleeperApi = (path, params = {}) => api(`sleeper?${new URLSearchParams({ path, ...params })}`);   // signed-in users only
 
 // Profile saves are debounced so rapid edits become one write, and mirrored locally for instant loads.
 let timer = null, pending = null;

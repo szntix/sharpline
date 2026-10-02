@@ -39,7 +39,7 @@ function liveTracker() {
 
 export function viewProof() {
   const pos = S.ui.proofPos, P = MODEL.proof, duel = P.duel[pos];
-  const seg = `<div class="seg" role="group" aria-label="Position">${POS.map((p) => `<button data-act="proof-pos" data-v="${p}" aria-pressed="${pos === p}">${p}</button>`).join("")}</div>`;
+  const seg = `<div class="seg" role="group" aria-label="Position">${POS.map((p) => `<button data-act="proof-pos" data-v="${p}" class="${p.toLowerCase()}" aria-pressed="${pos === p}">${p}</button>`).join("")}</div>`;
   const r2 = P.r2[pos], avg = (a) => a.reduce((t, x) => t + x, 0) / a.length;
   const maxWin = Math.max(...duel.map((d) => d.higher_wins));
   const feed = S.feed;

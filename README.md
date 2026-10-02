@@ -53,6 +53,46 @@ Sleeper's add and drop trends are read once a day after 6 AM. Only changes are s
 
 **Kickers and defenses.** Defenses are matched to expert ranks by team abbreviation (Sleeper's id for a defense), and kickers the id table lacks are matched by name and team. On the Players screen the K and DST tabs always list everyone and say why a row has no number.
 
+## Design
+
+A quiet neutral frame with turf green as the brand, and color only where it carries meaning.
+
+- **Who:** six position colors (QB red-orange, RB light green, WR deep blue, TE yellow, K violet, DST brown), chosen so the worst pair stays 15 or more apart under every color-vision type, and every chip carries its letters. Each team has a color and a logo plate; the logo sits over the team letters, and if it fails to load the letters remain.
+- **How likely:** one red-to-green scale for every chance (win chance, chance of a big game, percentiles). Red is darker than green so the two stay apart for red-green color-blind viewers, and the number is always printed beside the shade. Amounts with no good or bad stay neutral.
+- **Frame:** soft neutrals in light and dark, 1 px outlines, a faint shadow in light mode. A stronger edge is kept only where a boundary is what identifies a control or a selected state. Selection is a raised pill, and position bars take that position's color.
+- **Sizes:** nothing under 12 px, controls 44 px tall (segments at least 40 px wide), and 7 to 8 player rows fit on a 390 by 844 phone.
+- **Range:** the likely range is not shown on list rows (how wide it is follows almost entirely from the projection). The player page shows it in plain words: a bad week, the average, a great week.
+- **Slate:** a ranked game list first, with the scatter map one tap away.
+
+Colors and sizes live in `public/styles.css`. Team colors are in `public/js/teams.js`. The red-to-green scale is `chanceColor` in `public/js/charts.js`.
+
+## Position tabs follow the league
+
+The Players and Moves screens show a position tab only if some starting slot in the active league can use it. A league with no kicker or defense slot never sees K or DST, and those players also drop out of the All list. A Flex tab appears when any slot takes more than one position (Flex, W/R, W/T or Superflex) and lists RB, WR and TE. If the tab you were on stops applying after you switch leagues, the screen falls back to All. The rule lives in one place, `positionsFor` in `public/js/scoring.js`.
+
+## How fresh the data is
+
+Everyone sees the same data, because it is cached on the server and not on each phone. Each source has its own window:
+
+| Data | Refreshed | Notes |
+| --- | --- | --- |
+| Betting lines, scores, game status (ESPN) | Live on every build of the feed | Netlify's CDN reuses one build for 60 seconds across all users, then serves it while rebuilding |
+| Expert rankings (FantasyPros via dynastyprocess) | Server copy up to 45 minutes old | The source itself publishes about once a day |
+| Sleeper projections, injury reports | Up to 30 minutes | |
+| Game logs and opponent ratings | Up to 1 hour | |
+| Forecast weather | Up to 3 hours per team and day | |
+| Player list, schedule | 20 hours, 12 hours | Sleeper asks for the player list once a day |
+
+A phone checks again on its own: every minute while a game is live, every 3 minutes from 90 minutes before kickoff to 4 hours after, every 10 minutes otherwise, and whenever you come back to the app. It waits if you are typing or dragging, and it redraws only when a line, score, status or ranking actually changed (`public/js/refresh.js`). The refresh button still forces a check. The capture job (see above) also keeps the server copy warm during game windows.
+
+## Privacy and accounts
+
+- Each person's leagues, rosters and settings are stored under their own username. `/api/profile` returns only the signed-in user's own profile, answers nothing without a valid session token, and is never cached on the network or the device.
+- Sleeper data is public on Sleeper itself: anyone who knows a league ID or Sleeper username can read its rosters there. The app adds no extra exposure, and its Sleeper lookup (`/api/sleeper`) now requires a signed-in user.
+- PINs are salted and hashed (PBKDF2). Five wrong PINs lock that username for 15 minutes. Use a PIN of 6 or more digits.
+- The person who owns the Netlify account can read everything stored in Blobs, including profiles.
+- Endpoints that hold no personal data and need no sign-in: `feed`, `usage`, `players`, `accuracy`, `capture`, `diag`.
+
 ## Running record
 
 `snapshot-scheduled` runs every 3 hours. For each player it saves the inputs the model had **before** that player's team kicked off, and freezes them at kickoff. `/api/accuracy` grades those frozen rows against actual PPR points for four sources (blend, our model, experts, Sleeper) and reports error, bias and range coverage. After two graded weeks (at least 200 player pairs) it tunes how much Sleeper counts inside the consensus (starting guess: 35%). Results appear on the Proof screen.

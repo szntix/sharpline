@@ -1,8 +1,9 @@
 import { S, computed, pl } from "../state.js";
 import { teamContext } from "../model.js";
-import { esc, f1, sgn, kickoffText, ago } from "../ui.js";
+import { esc, f1, sgn, kickoffText, ago, plate, isDark } from "../ui.js";
+import { teamColors } from "../teams.js";
 import { slateMap } from "../charts.js";
-import { pulse, loading, feedError, prow, ribbonMax, sec, noteList } from "./shared.js";
+import { pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
 
 const WX_ICON = "";
 function wxLine(g) {
@@ -22,22 +23,24 @@ export function gameRow(g) {
   const c = g.line ? { h: g.line.total / 2 + g.line.spread / 2, a: g.line.total / 2 - g.line.spread / 2 } : null;
   const fav = g.line && g.line.spread !== 0 ? (g.line.spread > 0 ? g.home : g.away) : null;
   const spr = g.line ? (g.line.spread === 0 ? "Pick'em" : `${fav} by ${Math.abs(g.line.spread)}`) : "";
-  return `<a class="gamerow" href="#game/${esc(g.id)}">
-    <div class="tug"><div class="tm">${esc(g.away)}<small>${c ? f1(c.a) : ""}</small></div>
+  const dk = isDark(), sa = teamColors(g.away, dk).stripe, sh = teamColors(g.home, dk).stripe;
+  return `<a class="gamerow" href="#game/${esc(g.id)}" style="--ta:${sa};--th:${sh}">
+    <div class="tug"><div class="tm">${plate(g.away)}<span>${esc(g.away)}<small>${c ? f1(c.a) : ""}</small></span></div>
       <div class="tugbar" aria-hidden="true">${c ? `<i class="a" style="width:${(c.a / (c.a + c.h)) * 100}%"></i><i class="h" style="width:${(c.h / (c.a + c.h)) * 100}%"></i>` : ""}</div>
-      <div class="tm r">${esc(g.home)}<small>${c ? f1(c.h) : ""}</small></div></div>
+      <div class="tm r"><span>${esc(g.home)}<small>${c ? f1(c.h) : ""}</small></span>${plate(g.home)}</div></div>
     <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span>${esc(spr)}, total ${g.line.total}</span>${moveText(g.line)}` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
 }
 
 export function viewSlate() {
   if (!S.feed) return feedError() + loading("the schedule");
-  const games = S.feed.games;
-  const priced = games.filter((g) => g.line).length;
+  const games = S.feed.games, priced = games.filter((g) => g.line).length;
+  const ranked = [...games].sort((a, b) => (b.line ? b.line.total : -1) - (a.line ? a.line.total : -1));
   return `${feedError()}<h1 class="h1" style="margin-top:8px">Week ${S.feed.week} slate</h1>
     <p class="lede" style="margin-top:8px">Every game by how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense.</p>
     ${pulse(S.feed)}
-    ${priced ? sec("Where the points will be", slateMap(games), `${priced} of ${games.length} priced`) : ""}
-    ${sec("Games", `<div class="list">${games.map(gameRow).join("") || `<p class="muted">No games found for this week.</p>`}</div>`, "Expected points for each team on the bar")}`;
+    <div class="sec" style="margin-top:20px"><div class="list"><div class="band"><span>Ranked by game total</span><span>${priced} of ${games.length} priced</span></div>${ranked.map(gameRow).join("") || `<p class="muted" style="padding:16px">No games found for this week.</p>`}</div>
+      <p class="small muted" style="margin-top:8px">The bar on each game splits its expected points between the two teams.</p></div>
+    ${priced ? `<details class="mapd" style="margin-top:18px"><summary>Map view: totals against margins</summary><div style="padding-top:10px">${slateMap(games)}</div></details>` : ""}`;
 }
 
 function moveRail(label, open, now, signed = false) {
@@ -58,7 +61,6 @@ export function viewGame(id) {
   const tot = L ? L.total : null;
   const top = (team) => Object.values(C.P.proj).filter((p) => pl(p.id)?.t === team && ["QB", "RB", "WR", "TE"].includes(pl(p.id).p) && p.mean > 0).sort((a, b) => b.mean - a.mean).slice(0, 6).map((p) => p.id);
   const ids = [...top(g.away), ...top(g.home)];
-  const max = ribbonMax(ids.map((i) => C.P.proj[i]));
   const notes = [];
   if (L) {
     if (tot >= 49) notes.push({ t: "up", s: `Total ${tot}: one of the higher-scoring games on the board. Passing games and their pass catchers get a lift.` });
@@ -69,13 +71,11 @@ export function viewGame(id) {
   if (g.forecast?.temp <= 35) notes.push({ t: "down", s: `${g.forecast.temp}° at kickoff. Cold has cost quarterbacks a little production in past seasons.` });
   const done = g.status.completed;
   return `<a class="link" href="#slate" style="display:inline-block;margin:6px 0">Back to the slate</a>
-    <section class="turf"><div class="sub">${esc(kickoffText(g))}${g.venue?.name ? `, ${esc(g.venue.name)}` : ""}${g.tv ? `, ${esc(g.tv)}` : ""}</div>
-      <div class="tug" style="margin-top:12px"><div class="tm" style="font-size:46px">${esc(g.away)}<small style="color:rgba(255,255,255,.8)">${done ? g.awayScore : ca?.imp != null ? f1(ca.imp) + " expected" : ""}</small></div>
-      <div class="tugbar" style="height:18px;background:rgba(255,255,255,.2)">${L ? `<i style="background:#fff;opacity:.55;width:${(ca.imp / (ca.imp + ch.imp)) * 100}%"></i><i style="background:#fff;width:${(ch.imp / (ca.imp + ch.imp)) * 100}%"></i>` : ""}</div>
-      <div class="tm r" style="font-size:46px">${esc(g.home)}<small style="color:rgba(255,255,255,.8)">${done ? g.homeScore : ch?.imp != null ? f1(ch.imp) + " expected" : ""}</small></div></div>
-      ${L ? `<div class="stat3" style="margin-top:16px;color:var(--ink)"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}</section>
-    ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
+    <p class="muted small" style="margin:2px 0 10px">${esc(kickoffText(g))}${g.venue?.name ? `, ${esc(g.venue.name)}` : ""}${g.tv ? `, ${esc(g.tv)}` : ""}</p>
+    <div class="gh">${[[g.away, "Away", ca], [g.home, "Home", ch]].map(([ab, lab, cx]) => { const c = teamColors(ab, false); return `<div style="--tc:${c.plate};--tci:${c.plateInk}"><small>${lab}</small><span class="ab">${esc(ab)}</span><small>${done ? (ab === g.away ? g.awayScore : g.homeScore) + " final" : cx?.imp != null ? f1(cx.imp) + " expected points" : ""}</small></div>`; }).join("")}</div>
+    ${L ? `<div class="stat3" style="margin-top:12px"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
+    ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done && !/closing/i.test(L.book) ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
     ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
     ${notes.length ? sec("What to know", noteList(notes)) : ""}
-    ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C, { max })).join("")}</div>`) : ""}`;
+    ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`) : ""}`;
 }

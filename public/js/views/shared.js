@@ -1,7 +1,6 @@
 import { S, pl, league, computed } from "../state.js";
 import { signals } from "../engine.js";
-import { esc, f1, ago, agoShort, kickoffText, posLabel, statusChip } from "../ui.js";
-import { ribbon } from "../charts.js";
+import { esc, f1, ago, agoShort, kickoffText, posLabel, statusChip, posClass, plate, teamStripe } from "../ui.js";
 import { SLOT_LABEL } from "../scoring.js";
 
 export const SRC_NOTE = { blend: "", experts: "experts only", sleeper: "Sleeper only", model: "our model only", lines: "estimate", none: "no line", bye: "bye" };
@@ -31,21 +30,21 @@ export function feedError() {
   return S.errors.feed ? `<div class="banner err" role="alert" style="margin-bottom:12px">Couldn't reach the data feed: ${esc(S.errors.feed)}. What you see may be out of date. <button class="link" data-act="reload">Try again</button></div>` : "";
 }
 
-// One player row. The range ribbon sits under the name on phones and inline on wide screens.
-export function prow(id, C, { slot = null, sig = false, act = "", dim = false, max = 40, pick = false, extra = "" } = {}) {
+// One player row: team plate (or compare checkbox), name with a position chip, one number. The team shows as a stripe and a faint tint.
+export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, extra = "", showExp = false } = {}) {
   const p = pl(id), pr = C.P.proj[id]; if (!p) return "";
-  const pos = p.p, label = slot ? SLOT_LABEL[slot] || slot : posLabel(pos);
-  const g = pr?.game;
-  const where = pos === "DEF" || !p.t ? "" : pr?.bye ? "Bye week" : pr?.opp ? `${g.home === p.t ? "vs" : "at"} ${pr.opp}, ${kickoffText(g)}` : "";
-  const exp = C.ranks.exp[id] ? `, experts ${posLabel(pos)}${C.ranks.exp[id]}` : "";
+  const pos = p.p, g = pr?.game;
+  const where = pos === "DEF" || !p.t ? "" : pr?.bye ? "Bye week" : pr?.opp ? `${g.home === p.t ? "vs" : "at"} ${pr.opp} · ${kickoffText(g)}` : "";
+  const exp = showExp && C.ranks.exp[id] ? ` · experts ${posLabel(pos)}${C.ranks.exp[id]}` : "";
   const sigs = sig ? signals(id, C.c, C.P).filter((s) => s.t !== "info").slice(0, 2) : [];
   const note = SRC_NOTE[pr?.src] || "";
   const chip = statusChip(pr?.status, pr?.practice);
-  return `<div class="row rowlink${dim ? " dim" : ""}" data-go="player/${id}">
-    ${pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>` : `<div class="slot pos-${pos}">${esc(label)}</div>`}
-    <div class="who"><span class="name">${esc(p.n)}${chip}</span><span class="meta">${esc(p.t || "FA")}${where ? `, ${esc(where)}` : ""}${exp}${extra}</span></div>
+  const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
+    : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
+  return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
+    ${lead}
+    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span><span class="meta">${esc(p.t || "FA")}${where ? ` · ${esc(where)}` : ""}${exp}${extra}</span></div>
     <div class="proj"><span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span>${note ? `<small>${esc(note)}</small>` : ""}</div>
-    ${ribbon(pr, { max })}
     ${sigs.length ? `<div class="sigs">${sigs.map((s) => `<span class="${s.t}">${esc(s.s)}</span>`).join("")}</div>` : ""}
     ${act ? `<div class="act">${act}</div>` : ""}</div>`;
 }

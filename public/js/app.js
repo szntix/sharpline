@@ -1,7 +1,9 @@
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { S, setRender, league, commit, invalidate, loadData, loadFeed, pl, pname } from "./state.js";
+import { S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
+import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
+import { capHtml } from "./charts.js";
 import { viewWeek } from "./views/week.js";
 import { viewSlate, viewGame } from "./views/slate.js";
 import { viewPlayers } from "./views/players.js";
@@ -18,12 +20,15 @@ setRender(render);
 function applyTheme() {
   const t = localStorage.getItem("sharpline.theme") || "auto";
   if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) ? "#0a1122" : "#eef1f6");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) ? "#151517" : "#eae8e1");
 }
 applyTheme();
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { applyTheme(); render(); });
+// A team logo that does not load just disappears, leaving the letters underneath.
+$app.addEventListener("error", (e) => { const t = e.target; if (t?.tagName === "IMG" && t.closest(".plate")) t.remove(); }, true);
 
 // ---------------------------------------------------------------- icons and shell
-const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="var(--turf)"/><g stroke="#fff" stroke-width="2.6" opacity=".55"><path d="M16 8v48M32 8v48M48 8v48"/></g><ellipse cx="38" cy="30" rx="14" ry="8.6" transform="rotate(-18 38 30)" fill="#8a4620" stroke="#2b1206" stroke-width="1.6"/><path d="M31 32l14-6M34.5 26.5l1.6 5M38 25.3l1.6 5M41.5 24l1.6 5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#2b5837"/><g stroke="#fff" stroke-width="2.6" opacity=".55"><path d="M16 8v48M32 8v48M48 8v48"/></g><ellipse cx="38" cy="30" rx="14" ry="8.6" transform="rotate(-18 38 30)" fill="#8a4620" stroke="#2b1206" stroke-width="1.6"/><path d="M31 32l14-6M34.5 26.5l1.6 5M38 25.3l1.6 5M41.5 24l1.6 5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const I = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICON = {
   week: I('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M9 5v14M15 5v14M3 12h18" opacity=".6"/><circle cx="12" cy="12" r="2"/>'),
@@ -92,6 +97,18 @@ async function boot() {
   loadData();
 }
 
+// ---------------------------------------------------------------- auto-refresh
+// Quiet re-check while the app is open. It waits if the page is hidden, a finger is dragging the dotplot, or a field has focus.
+function autoRefresh() {
+  if (!S.user || !S.feed || S.loading || document.hidden || dragging) return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+  if (Date.now() - (S.feedAt || 0) < nextRefreshMs(S.feed)) return;
+  S._keepScroll = true; refreshFeedQuiet().finally(() => { S._keepScroll = false; });
+}
+setInterval(autoRefresh, 20e3);
+document.addEventListener("visibilitychange", autoRefresh);
+window.addEventListener("online", autoRefresh);
+
 // ---------------------------------------------------------------- dotplot interaction
 function setThreshold(svg, v) {
   const max = +svg.dataset.max, W = +svg.dataset.w, pl_ = +svg.dataset.pl, pr_ = +svg.dataset.pr;
@@ -100,7 +117,7 @@ function setThreshold(svg, v) {
   svg.querySelector(".thr").style.transform = `translateX(${x}px)`;
   let n = 0; svg.querySelectorAll(".dot").forEach((d) => { const on = +d.dataset.v >= v; d.classList.toggle("on", on); if (on) n++; });
   const cap = document.getElementById(svg.dataset.cap);
-  if (cap) cap.innerHTML = `In <b>${n} of 20</b> games ${esc((svg.dataset.name || "he").split(" ")[0])} scores <b>${v}+</b> points.`;
+  if (cap) cap.innerHTML = capHtml(n, (svg.dataset.name || "he").split(" ")[0], v);
   const chips = svg.closest("section")?.querySelectorAll(".thresholds button"); chips?.forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.thr === v)));
   if (svg.id.startsWith("dp-")) S.ui.thr[svg.id.slice(3)] = v;
 }
@@ -139,6 +156,7 @@ $app.addEventListener("click", async (e) => {
     case "pl-sort": S.ui.plSort = v; render(); break;
     case "pl-filter": S.ui.plFilter = v; S.ui.plMore = 1; render(); break;
     case "pl-more": S.ui.plMore++; render(); break;
+    case "cmp-mode": S.ui.cmpMode = !S.ui.cmpMode; if (!S.ui.cmpMode) S.ui.pick = []; render(); break;
     case "pick-cmp": { const i = S.ui.pick.indexOf(id); if (i >= 0) S.ui.pick.splice(i, 1); else { if (S.ui.pick.length >= 2) S.ui.pick.shift(); S.ui.pick.push(id); } render(); break; }
     case "cmp-go": { const [x, y] = S.ui.pick; S.ui.pick = []; location.hash = `compare/${x}/${y}`; break; }
     case "cmp-clear": S.ui.pick = []; render(); break;
@@ -181,7 +199,10 @@ $app.addEventListener("click", async (e) => {
 
 // ---------------------------------------------------------------- form changes and search
 $app.addEventListener("change", (e) => {
-  const el = e.target, b = el.dataset.bind; if (!b) return;
+  const el = e.target, b = el.dataset.bind;
+  if (el.tagName === "SELECT" && el.dataset.act === "pl-sort") { S.ui.plSort = el.value; render(); return; }
+  if (el.tagName === "SELECT" && el.dataset.act === "pl-filter") { S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
+  if (!b) return;
   const L = league(), E = editingLeague();
   if (b === "opponent") { L.opponent = el.value || null; commit(); return; }
   if (b === "partner") { S.ui.partner = el.value; S.ui.get = []; render(); return; }

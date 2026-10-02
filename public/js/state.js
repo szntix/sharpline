@@ -1,3 +1,4 @@
+import { feedSignature } from "./refresh.js";
 import { api, sleeperApi, saveProfile } from "./api.js";
 import { toast } from "./ui.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
@@ -7,7 +8,7 @@ import { buildProjections, rosValues, replacement } from "./engine.js";
 export const S = {
   user: null, profile: null, players: null, feed: null, usage: null, outlook: null, acc: null, trending: {},
   week: null, activeWeek: null, errors: {}, loading: true, saveState: "saved", route: { name: "week", args: [] },
-  ui: { wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
+  ui: { cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
 };
 export let render = () => {};
 export const setRender = (fn) => { render = fn; };
@@ -46,12 +47,21 @@ export function computed(L = leagueOrDefault()) {
 
 export async function loadFeed(week = null) {
   try {
-    S.feed = await api(`feed${week ? `?week=${week}` : ""}`, { auth: false });
+    S.feed = await api(`feed${week ? `?week=${week}` : ""}`, { auth: false }); S.feedAt = Date.now();
     if (S.week == null || week == null) S.activeWeek = S.feed.week;
     S.week = S.feed.week; delete S.errors.feed;
   } catch (e) { S.errors.feed = e.message; }
   invalidate(); render();
 }
+// Re-check the feed without touching the screen unless something visible changed.
+export async function refreshFeedQuiet() {
+  try {
+    const f = await api(`feed${S.week ? `?week=${S.week}` : ""}`, { auth: false }); S.feedAt = Date.now();
+    if (feedSignature(f) === feedSignature(S.feed)) { S.feed.fetchedAt = f.fetchedAt; return false; }
+    S.feed = f; S.week = f.week; delete S.errors.feed; invalidate(); render(); return true;
+  } catch { return false; }     // keep what is on screen; errors only surface on a manual refresh
+}
+
 export async function loadData() {
   S.loading = true;
   const jobs = {

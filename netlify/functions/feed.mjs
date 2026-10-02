@@ -51,7 +51,7 @@ export default async (req) => {
   try {
     const url = new URL(req.url);
     const feed = await buildFeed(url.searchParams.get("week"));
-    return json(feed, 200, { "cache-control": "public, max-age=60" });
+    return json(feed, 200, { "cache-control": "public, max-age=30", "netlify-cdn-cache-control": "public, durable, max-age=60, stale-while-revalidate=120" });
   } catch (e) {
     return fail(`Couldn't assemble this week's data: ${e.message}`, 502);
   }

@@ -30,7 +30,7 @@ export async function loadPlayers() {
 export default async () => {
   try {
     const players = await loadPlayers();
-    return json(players, 200, { "cache-control": "public, max-age=3600" });
+    return json(players, 200, { "cache-control": "public, max-age=3600", "netlify-cdn-cache-control": "public, durable, max-age=3600, stale-while-revalidate=86400" });
   } catch (e) {
     return fail(`Couldn't load the player list: ${e.message}`, 502);
   }

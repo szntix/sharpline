@@ -44,6 +44,6 @@ async function grade() {
 }
 
 export default async () => {
-  try { return json(await cached("accuracy-v1", 30 * 60e3, grade), 200, { "cache-control": "public, max-age=300" }); }
+  try { return json(await cached("accuracy-v1", 30 * 60e3, grade), 200, { "cache-control": "public, max-age=300", "netlify-cdn-cache-control": "public, durable, max-age=300, stale-while-revalidate=600" }); }
   catch (e) { return fail(`Couldn't grade yet: ${e.message}`, 502); }
 };

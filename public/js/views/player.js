@@ -2,8 +2,8 @@ import { S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
 import { signals, statusText } from "../engine.js";
-import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip } from "../ui.js";
-import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots, ribbon } from "../charts.js";
+import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe } from "../ui.js";
+import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots, rangeBar } from "../charts.js";
 import { quantile } from "../engine.js";
 import { loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
 
@@ -35,17 +35,17 @@ export function viewPlayer(id) {
   const out = pr && !(pr.mean > 0);
   const head = out
     ? `<div class="hero-num" style="font-size:60px">${pr.bye ? "Bye" : pr.status || "No line"}</div><p style="margin-top:6px">${pr.bye ? "Not playing this week." : pr.status ? esc(statusText(pr)) : "No projection yet."}</p>`
-    : `<div class="pj"><div class="hero-num">${f1(pr.mean)}</div><div class="rng">Likely <b>${f0(quantile(pr, 0.1))} to ${f0(quantile(pr, 0.9))}</b><br>points in ${L ? "your" : "standard PPR"} scoring.<br>${pr.status ? esc(statusText(pr)) : ""}</div></div>`;
+    : `<div class="pj"><div class="hero-num">${f1(pr.mean)}</div><div class="rng">Most weeks, <b>${f0(quantile(pr, 0.1))} to ${f0(quantile(pr, 0.9))}</b><br>points in ${L ? "your" : "standard PPR"} scoring.<br>${pr.status ? esc(statusText(pr)) : ""}</div></div>${rangeBar(pr, { max: axisMax([pr]) })}`;
   const ctxBits = [`${posLabel(pos)}, ${esc(p.t || "free agent")}${AGE(p)}`];
   if (g && pos !== "DEF") ctxBits.push(`${g.home === p.t ? "vs" : "at"} ${esc(pr.opp)}, ${esc(kickoffText(g))}`);
   if (pr?.spread != null && pr.total != null) ctxBits.push(`${esc(p.t)} ${pr.spread >= 0 ? "favored by " + pr.spread : "underdog by " + -pr.spread}, total ${pr.total}`);
   if (pr?.wx) ctxBits.push(`wind ${pr.wx.wind} mph`);
   const chips = [ours ? `We rank #${ours} ${posLabel(pos)}` : "", exp ? `Experts #${exp} ${posLabel(pos)}` : "", pr?.src && SRC_NOTE[pr.src] ? SRC_NOTE[pr.src] : ""].filter(Boolean);
   const hero = `<a class="link" href="#players" style="display:inline-block;margin:6px 0">Back to players</a>
-    <section class="turf ph"><div class="nm">${esc(p.n)}${statusChip(pr?.status, pr?.practice).replace('class="tag', 'style="font-size:13px;vertical-align:8px" class="tag')}</div>
+    <section class="phead" style="--team:${teamStripe(p.t)}"><div class="top2"><span class="pos ${posClass(pos)}">${posLabel(pos)}</span>${statusChip(pr?.status, pr?.practice)}</div><div class="nm">${esc(p.n)}</div>
       <div class="ctx">${ctxBits.map((b) => `<span>${b}</span>`).join("")}</div>${head}
       ${chips.length ? `<div class="chipline">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
-      <div class="toolbar"><a class="btn solid" href="#compare/${id}">Compare with…</a>${L && !L.roster.includes(id) ? `<button class="btn" data-act="add-mine" data-id="${id}">Add to my team</button>` : ""}</div></section>`;
+      <div class="toolbar"><a class="btn primary" href="#compare/${id}">Compare with…</a>${L && !L.roster.includes(id) ? `<button class="btn" data-act="add-mine" data-id="${id}">Add to my team</button>` : ""}</div></section>`;
   if (out) return feedError() + hero + notesSection(id, C);
 
   // 1. How likely is a big game
