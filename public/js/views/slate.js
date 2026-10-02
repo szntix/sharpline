@@ -26,7 +26,7 @@ export function gameRow(g) {
   const dk = isDark(), sa = teamColors(g.away, dk).stripe, sh = teamColors(g.home, dk).stripe;
   return `<a class="gamerow" href="#game/${esc(g.id)}">
     <div class="tug"><div class="tm">${plate(g.away)}<span>${esc(g.away)}<small>${c ? f1(c.a) : ""}</small></span></div>
-      <div class="tugbar" aria-hidden="true">${c ? `<div class="tb-in"><i style="width:${(c.a / (c.a + c.h)) * 100}%;background:${sa}"></i><i style="width:${(c.h / (c.a + c.h)) * 100}%;background:${sh}"></i></div><span class="mid"></span>` : ""}</div>
+      <div class="tugbar" aria-hidden="true">${c ? `<div class="tb-in"><i style="width:${(c.a / (c.a + c.h)) * 100}%;background:${sa}"></i><i style="width:${(c.h / (c.a + c.h)) * 100}%;background:${sh}"></i></div>` : ""}</div>
       <div class="tm r"><span>${esc(g.home)}<small>${c ? f1(c.h) : ""}</small></span>${plate(g.home)}</div></div>
     <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span>${esc(spr)}, total ${g.line.total}</span>${moveText(g.line)}` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
 }
@@ -39,7 +39,7 @@ export function viewSlate() {
     <p class="lede" style="margin-top:8px">Every game by how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense.</p>
     ${pulse(S.feed)}
     <div class="sec" style="margin-top:20px"><div class="list"><div class="band"><span>Ranked by game total</span><span>${priced} of ${games.length} priced</span></div>${ranked.map(gameRow).join("") || `<p class="muted" style="padding:16px">No games found for this week.</p>`}</div>
-      <p class="small muted" style="margin-top:8px">Each bar splits the game's expected points between the two teams, in their colors, and the notch in the middle marks an even split.</p></div>
+      <p class="small muted" style="margin-top:8px">Each bar splits the game's expected points between the two teams, in their colors.</p></div>
     ${priced ? `<details class="mapd" style="margin-top:18px"><summary>Map view: totals against margins</summary><div style="padding-top:10px">${slateMap(games)}</div></details>` : ""}`;
 }
 

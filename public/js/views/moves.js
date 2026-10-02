@@ -4,7 +4,7 @@ import { xppr } from "../model.js";
 import { SLOT_ELIG, positionsFor, inPosition } from "../scoring.js";
 import { esc, f1, f0, sgn, posLabel, posClass } from "../ui.js";
 import { luck } from "../charts.js";
-import { loading, feedError, prow, ribbonMax, emptyLeague, sec } from "./shared.js";
+import { loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
 
 function unavailableSet(L) { const s = new Set([...L.roster, ...(L.taken || [])]); for (const o of L.others) for (const id of o.roster) s.add(id); return s; }
 
@@ -13,7 +13,7 @@ export function viewMoves() {
   const tab = S.ui.moves, L = league();
   const seg = `<div class="seg" role="group" aria-label="Section" style="margin:10px 0 14px">${[["waivers", "Waivers"], ["trades", "Trades"], ["regress", "Hot and cold"]].map(([k, l]) => `<button data-act="moves-tab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
   const body = tab === "regress" ? viewRegress() : !L ? emptyLeague() : tab === "trades" ? viewTrades(L) : viewWaivers(L);
-  return `${feedError()}<h1 class="h1" style="margin-top:8px">Moves</h1>${seg}${body}`;
+  return `${feedError()}<h1 class="h1" style="margin-top:8px">Moves</h1>${seg}${L && tab !== "regress" ? syncLine(L) : ""}${body}`;
 }
 
 function viewWaivers(L) {
@@ -23,12 +23,11 @@ function viewWaivers(L) {
   const mode = S.ui.wvMode, pos = S.ui.wvPos, manual = !L.sleeper;
   const positions = positionsFor(L.slots);
   const rows = W.rows.filter((r) => inPosition(pl(r.id)?.p, pos)).sort((a, b) => (mode === "week" ? b.weekGain - a.weekGain || b.proj - a.proj : b.rosGain - a.rosGain || b.per - a.per)).slice(0, 40);
-  const max = ribbonMax(rows.map((r) => P.proj[r.id]));
   return `<p class="lede">Ranked by how much each free agent would add to your starting lineup. ${manual ? "Mark players other teams already have so they drop off this list." : "Rostered players are removed using your Sleeper league."}</p>
     <div class="stack" style="margin-top:12px"><div class="toolbar"><div class="seg" role="group" aria-label="Horizon">${[["ros", "Rest of season"], ["week", "This week"]].map(([k, l]) => `<button data-act="wv-mode" data-v="${k}" aria-pressed="${mode === k}">${l}</button>`).join("")}</div>
       <div class="seg" role="group" aria-label="Position">${positions.map((p) => `<button data-act="wv-pos" data-v="${p}" class="${{ QB: "qb", RB: "rb", WR: "wr", TE: "te", FLEX: "flex", K: "k", DEF: "dst" }[p] || ""}" aria-pressed="${pos === p}">${p === "ALL" ? "All" : p === "FLEX" ? "Flex" : posLabel(p)}</button>`).join("")}</div></div>
       ${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}</div>
-    <div class="list" style="margin-top:8px">${rows.map((r) => prow(r.id, C, { sig: true, max, extra: `, ${mode === "week" ? (r.weekGain > 0.05 ? sgn(r.weekGain) + " to your lineup" : "no lineup gain") : (r.rosGain > 0.5 ? sgn(r.rosGain, 0) + " season pts" : "no lineup gain")}`,
+    <div class="list" style="margin-top:8px">${rows.map((r) => prow(r.id, C, { sig: true, extra: `, ${mode === "week" ? (r.weekGain > 0.05 ? sgn(r.weekGain) + " to your lineup" : "no lineup gain") : (r.rosGain > 0.5 ? sgn(r.rosGain, 0) + " season pts" : "no lineup gain")}`,
       act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 0">No free agents at this position improve your lineup.</p>`}</div>`;
 }
 

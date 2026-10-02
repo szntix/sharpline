@@ -61,3 +61,12 @@ export function emptyLeague() {
 }
 export const sec = (title, body, aside = "") => `<section class="sec"><header><h2 class="h2">${title}</h2>${aside ? `<span class="aside">${aside}</span>` : ""}</header>${body}</section>`;
 export const noteList = (items) => `<ul class="notes">${items.map((n) => `<li class="${n.t}">${esc(n.s)}</li>`).join("")}</ul>`;
+
+// Where the roster data came from and how fresh it is, with a way to refresh it right now.
+export function syncLine(L, style = "") {
+  if (!L?.sleeper) return "";
+  const t = L.sleeper.syncedAt, when = t ? ago(t) : "when you imported", busy = S.ui.syncing;
+  const text = busy ? `<span class="spinner" aria-hidden="true"></span><span>Checking Sleeper for roster changes</span>`
+    : S.ui.syncErr ? `<span>Couldn't reach Sleeper just now. Showing rosters from ${esc(t ? ago(t) : "when you imported")}.</span>` : `<span>Rosters from Sleeper, checked ${esc(when)}.</span>`;
+  return `<div class="syncline" role="status" ${style ? `style="${style}"` : ""}>${text}${busy ? "" : `<button class="link" data-act="resync-now">Refresh</button>`}</div>`;
+}

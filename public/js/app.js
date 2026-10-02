@@ -12,7 +12,7 @@ import { viewPlayer } from "./views/player.js";
 import { viewCompare } from "./views/compare.js";
 import { viewMoves } from "./views/moves.js";
 import { viewProof } from "./views/proof.js";
-import { viewLeagues, newLeague, impFind, impLeague, impTeam, resync } from "./views/leagues.js";
+import { viewLeagues, newLeague, impFind, impLeague, impTeam, resync, syncRosters, ensureRosters } from "./views/leagues.js";
 
 const $app = document.getElementById("app");
 setRender(render);
@@ -67,6 +67,7 @@ function render() {
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch {} } }
   if (window.scrollY !== y && S._keepScroll) window.scrollTo(0, y);
   document.title = "Sharpline";
+  if (["week", "players", "moves"].includes(name)) queueMicrotask(() => ensureRosters());
 }
 window.addEventListener("hashchange", () => { S._keepScroll = false; render(); window.scrollTo(0, 0); });
 
@@ -104,6 +105,7 @@ async function boot() {
 function autoRefresh() {
   if (!S.user || !S.feed || S.loading || document.hidden || dragging) return;
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+  ensureRosters(10 * 60e3);
   if (Date.now() - (S.feedAt || 0) < nextRefreshMs(S.feed)) return;
   S._keepScroll = true; refreshFeedQuiet().finally(() => { S._keepScroll = false; });
 }
@@ -195,6 +197,8 @@ $app.addEventListener("click", async (e) => {
     case "imp-league": impLeague(id); break;
     case "imp-team": impTeam(id); break;
     case "resync": resync(editingLeague()); break;
+    case "resync-now": syncRosters(league(), { fresh: true }); break;
+    case "sync-league": syncRosters(S.profile.leagues.find((l) => l.id === id), { fresh: true }); break;
     case "signout": session.set(null); renderAuth(); break;
   }
 });

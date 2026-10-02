@@ -100,7 +100,7 @@ main { padding: 4px 16px 112px; max-width: 760px; margin: 0 auto; }
 .link { border: 0; background: none; color: var(--link); font-weight: 700; padding: 10px 4px; min-height: 44px; }
 a.link { display: inline-flex; align-items: center; }
 /* One segmented bar for every choice. The selected segment is a raised pill; position segments take that position's color. */
-.seg, .thresholds { display: flex; background: var(--paper); border: 1px solid var(--hair2); border-radius: 14px; overflow-x: auto; scrollbar-width: none; width: 100%; max-width: 100%; margin-top: 0; gap: 0; }
+.seg, .thresholds { display: flex; background: var(--paper); border: 1px solid var(--hair2); border-radius: 14px; overflow-x: auto; scrollbar-width: none; width: 100%; max-width: 100%; gap: 0; }
 .seg::-webkit-scrollbar, .thresholds::-webkit-scrollbar { display: none; }
 .seg button, .thresholds button { flex: 1 1 0; min-width: min-content; min-height: 44px; border: 0; background: transparent; padding: 0 8px; font-weight: 750; font-size: 14px; font-stretch: 88%; letter-spacing: .02em; color: var(--ink2); white-space: nowrap; position: relative; isolation: isolate; border-radius: 0; }
 .seg button + button, .thresholds button + button { background: linear-gradient(var(--hair2), var(--hair2)) left center / 1px 46% no-repeat; }
@@ -312,13 +312,12 @@ svg .ax { fill: var(--ink3); font: 700 12px var(--font); font-stretch: 75%; } sv
 
 .gamerow { display: block; padding: 14px 16px; position: relative; }
 .gamerow + .gamerow { border-top: 1px solid var(--hair); }
-.tug { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.tug { display: grid; grid-template-columns: 88px minmax(0, 1fr) 88px; align-items: center; gap: 10px; }
 .tug .tm { display: flex; align-items: center; gap: 8px; font-stretch: 74%; font-weight: 850; font-size: 22px; } .tug .tm.r { justify-content: flex-end; }
 .tug .tm small { display: block; font-stretch: 100%; font-weight: 500; font-size: 12px; color: var(--ink2); }
 .tugbar { position: relative; height: 14px; }
 .tugbar .tb-in { display: flex; gap: 2px; height: 100%; border-radius: 7px; overflow: hidden; background: var(--hair2); }
 .tugbar .tb-in i { display: block; height: 100%; }
-.tugbar .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); box-shadow: 0 0 0 2px var(--slate); }
 .gmeta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 13px; color: var(--ink2); }
 .gmeta b { color: var(--ink); font-weight: 650; }
 .mv-up { color: var(--up-ink); font-weight: 700; } .mv-down { color: var(--down-ink); font-weight: 700; }
@@ -393,3 +392,10 @@ details > summary { cursor: pointer; }
   .bsel .lab { display: none; } .band { padding: 0 10px; }
 }
 :root[data-tint="on"] .row, :root[data-tint="on"] .phead { background: color-mix(in srgb, var(--team, transparent) 12%, var(--slate)); }
+/* Small phones: smaller team blocks so the slate bar keeps some length. The columns stay fixed, so every bar still lines up. */
+@media (max-width: 359px) {
+  .tug { grid-template-columns: 76px minmax(0, 1fr) 76px; gap: 6px; }
+  .tug .tm { gap: 6px; font-size: 17px; } .tug .tm .plate { width: 30px; height: 30px; font-size: 11px; }
+}
+.syncline { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; font-size: 13px; color: var(--ink2); margin: 0 0 10px; }
+.syncline .link { padding: 0 4px; }

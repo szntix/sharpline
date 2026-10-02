@@ -19,7 +19,7 @@ const themeNow = () => localStorage.getItem("sharpline.theme") || "auto";
 export function viewLeagues() {
   const L = S.profile.leagues.find((l) => l.id === S.ui.editing) || null;
   const list = S.profile.leagues.map((l) => `<div class="row slotted"><span class="pos neu">${l.sleeper ? "SL" : "MAN"}</span><div class="who"><span class="name">${esc(l.name)}${S.profile.active === l.id ? ` <span class="pos" style="--f:var(--brand);color:var(--brand-ink)">ACTIVE</span>` : ""}</span><span class="meta">${LEAGUE_TYPES[l.type]}, ${l.teams} teams, ${esc(SCORING_PRESETS[l.scoringPreset]?.label || "Custom scoring")}, ${l.roster.length} players</span></div>
-    <div class="proj" style="display:flex;gap:6px">${S.profile.active !== l.id ? `<button class="btn sm" data-act="use-league" data-id="${l.id}">Use</button>` : ""}<button class="btn sm" data-act="edit-league" data-id="${l.id}">Edit</button></div></div>`).join("");
+    <div class="act">${S.profile.active !== l.id ? `<button class="btn sm" data-act="use-league" data-id="${l.id}">Use</button>` : ""}${l.sleeper ? `<button class="btn sm" data-act="sync-league" data-id="${l.id}" ${S.ui.syncing ? "disabled" : ""}>Refresh rosters</button>` : ""}<button class="btn sm" data-act="edit-league" data-id="${l.id}">Edit</button>${l.sleeper ? `<span class="muted small" style="align-self:center">Rosters ${l.sleeper.syncedAt ? "checked " + ago(l.sleeper.syncedAt) : "from import"}</span>` : ""}</div></div>`).join("");
   return `<h1 class="h1" style="margin-top:8px">Leagues</h1>
     ${sec("Your leagues", `<div class="list">${list || `<p class="muted" style="padding:14px 0">No leagues yet.</p>`}</div><div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="new-league">New league</button><button class="btn" data-act="imp-start">Import from Sleeper</button></div>`)}
     ${S.ui.imp ? viewImport() : ""}${L ? viewEditLeague(L) : ""}${viewAccount()}`;
@@ -120,14 +120,45 @@ export async function setSleeperOpponent(L) {
     if (opp) L.opponent = `sl${opp.roster_id}`;
   } catch {}
 }
-export async function resync(L) {
+// Everyone on a team: the active list plus injured reserve and the taxi squad, which Sleeper keeps in separate lists.
+const onTeam = (r) => [...new Set([...(r.players || []), ...(r.reserve || []), ...(r.taxi || [])])].filter((p) => S.players?.[p]);
+const unavailable = (L) => new Set([...L.roster, ...(L.taken || []), ...L.others.flatMap((o) => o.roster)]);
+
+// Pull the current rosters from Sleeper. The rosters call is live, so it reflects every add, drop, trade and waiver result as of now.
+// Sleeper is the source of truth for a synced league, so players marked "taken" by hand are cleared. If Sleeper cannot be reached,
+// or sends nothing usable, the rosters already saved are kept and nothing is wiped.
+export async function syncRosters(L, { fresh = false, quiet = false } = {}) {
+  if (!L?.sleeper || S.ui.syncing || !S.players) return null;
+  S.ui.syncing = true; if (!quiet) render();
   try {
-    const rosters = await sleeperApi(`league/${L.sleeper.leagueId}/rosters`);
+    const before = unavailable(L);
+    const rosters = await sleeperApi(`league/${L.sleeper.leagueId}/rosters`, fresh ? { fresh: "1" } : {});
+    if (!Array.isArray(rosters) || !rosters.length || rosters.every((r) => !onTeam(r).length)) throw new Error("Sleeper sent no rosters");
+    const mine = rosters.find((r) => r.roster_id === L.sleeper.rosterId); if (!mine) throw new Error("your team was not in the league's rosters");
     for (const r of rosters) {
-      const ids = (r.players || []).filter((p) => S.players?.[p]);
+      const ids = onTeam(r);
       if (r.roster_id === L.sleeper.rosterId) L.roster = ids;
-      else { const o = L.others.find((x) => x.id === `sl${r.roster_id}`); if (o) o.roster = ids; }
+      else { const o = L.others.find((x) => x.id === `sl${r.roster_id}`); if (o) o.roster = ids; else L.others.push({ id: `sl${r.roster_id}`, name: `Team ${r.roster_id}`, roster: ids }); }
     }
-    await setSleeperOpponent(L); commit("Rosters synced");
-  } catch (e) { toast(`Sync failed: ${e.message}`); }
+    L.taken = [];
+    if (!quiet || L.sleeper.week !== S.feed?.week) { await setSleeperOpponent(L); L.sleeper.week = S.feed?.week; }
+    const after = unavailable(L), gone = [...after].filter((id) => !before.has(id)).length, back = [...before].filter((id) => !after.has(id)).length;
+    L.sleeper.syncedAt = Date.now(); delete S.ui.syncErr; S.ui.syncing = false;
+    commit(quiet ? undefined : gone || back ? `Rosters synced: ${gone} now taken, ${back} available again` : "Rosters are up to date");
+    return { gone, back };
+  } catch (e) {
+    S.ui.syncing = false; S.ui.syncErr = e.message || "unknown error"; S.ui.syncErrAt = Date.now();
+    if (!quiet) toast(`Couldn't reach Sleeper: ${S.ui.syncErr}`);
+    render(); return null;
+  }
+}
+export const resync = (L) => syncRosters(L, { fresh: true });
+
+// Called when a screen that depends on rosters opens, and every few minutes while the app stays open.
+export function ensureRosters(maxAgeMs = 5 * 60e3) {
+  const L = league();
+  if (!L?.sleeper || S.ui.syncing || !S.players) return;
+  if (S.ui.syncErrAt && Date.now() - S.ui.syncErrAt < 60e3) return;            // after a failure, wait a minute before trying again
+  if (Date.now() - (L.sleeper.syncedAt || 0) < maxAgeMs) return;
+  syncRosters(L, { quiet: true });
 }

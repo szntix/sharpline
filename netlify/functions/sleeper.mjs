@@ -17,9 +17,10 @@ export default async (req) => {
   const path = (url.searchParams.get("path") || "").replace(/^\/+/, "");
   if (!ALLOWED.some((r) => r.test(path))) return fail("Path not allowed");
   const qs = new URLSearchParams(url.searchParams); qs.delete("path");
+  const fresh = qs.get("fresh") === "1"; qs.delete("fresh");      // a manual refresh skips the short server cache; the flag is never sent on to Sleeper
   const full = qs.toString() ? `${path}?${qs}` : path;
   try {
-    const ttl = path.startsWith("players/") ? 30 * 60e3 : 2 * 60e3;
+    const ttl = fresh ? 0 : path.startsWith("players/") ? 30 * 60e3 : 2 * 60e3;
     const data = await cached(`sleeper:${full}`, ttl, () => sleeper(full));
     return json(data);
   } catch (e) {
