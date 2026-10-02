@@ -10,5 +10,5 @@ const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 
 export const inkOn = (h) => ((lum(h) + 0.05) / 0.0556 >= 1.05 / (lum(h) + 0.05) ? "#111111" : "#FFFFFF");
 export function teamColors(abbr, dark) {
   const t = TEAMS[abbr]; if (!t) return { stripe: "var(--edge)", plate: "var(--hair2)", plateInk: "var(--ink)" };
-  return { stripe: dark ? t.d : t.l, plate: t.p, plateInk: inkOn(t.p) };
+  return { stripe: (dark ? t.d : t.l) || t.p, plate: t.p, plateInk: inkOn(t.p) };
 }

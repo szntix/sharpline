@@ -4,6 +4,7 @@ import { S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFe
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
+import { VERSION } from "./version.js";
 import { viewWeek } from "./views/week.js";
 import { viewSlate, viewGame } from "./views/slate.js";
 import { viewPlayers } from "./views/players.js";
@@ -18,6 +19,7 @@ setRender(render);
 
 // ---------------------------------------------------------------- theme
 function applyTheme() {
+  try { document.documentElement.dataset.tint = localStorage.getItem("sharpline.tint") === "on" ? "on" : "off"; } catch {}
   const t = localStorage.getItem("sharpline.theme") || "auto";
   if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) ? "#151517" : "#eae8e1");
@@ -55,7 +57,7 @@ function render() {
   let body = "";
   try {
     body = { week: viewWeek, slate: viewSlate, game: () => viewGame(args[0]), players: viewPlayers, player: () => viewPlayer(args[0]), compare: () => viewCompare(args[0], args[1]), moves: viewMoves, proof: viewProof, leagues: viewLeagues }[name]();
-  } catch (e) { console.error(e); body = `<div class="panel empty"><h2 class="h2">Something went wrong on this screen</h2><p class="muted small" style="margin:6px 0 14px">${esc(e.message)}</p><a class="btn primary" href="#week">Back to the week</a></div>`; }
+  } catch (e) { console.error(e); body = `<div class="panel empty"><h2 class="h2">Something went wrong on this screen</h2><p class="muted small" style="margin:6px 0 14px">${esc(e.message)}<br>Version ${VERSION}</p><a class="btn primary" href="#week">Back to the week</a></div>`; }
   const wk = S.feed?.week ?? S.week, atNow = S.activeWeek == null || wk === S.activeWeek;
   $app.innerHTML = `<header class="top"><a class="brand" href="#week" aria-label="Sharpline home">${LOGO}<span>Sharpline</span></a>
       <div class="weeknav" role="group" aria-label="Week"><button data-act="wk-prev" aria-label="Previous week" ${!wk || wk <= 1 ? "disabled" : ""}>${ICON.prev}</button><b ${atNow ? "" : 'data-act="wk-now" style="cursor:pointer" title="Back to the current week"'}>${wk ? `Week ${wk}` : "…"}</b><button data-act="wk-next" aria-label="Next week" ${!wk || wk >= 18 ? "disabled" : ""}>${ICON.next}</button></div>
@@ -146,6 +148,7 @@ $app.addEventListener("click", async (e) => {
   if (thr) { const svg = document.getElementById(thr.closest(".thresholds").dataset.for); if (svg) setThreshold(svg, +thr.dataset.thr); return; }
   const el = e.target.closest("[data-act]");
   if (!el) { const go = e.target.closest("[data-go]"); if (go && !e.target.closest("button, a, select, input")) location.hash = go.dataset.go; return; }
+  if (el.tagName === "SELECT") return;      // dropdowns act on "change", not on the tap that opens them
   const a = el.dataset.act, id = el.dataset.id, v = el.dataset.v, L = league();
   switch (a) {
     case "reload": { S.errors = {}; el.disabled = true; await loadFeed(S.week); loadData(); toast("Checked for new data"); break; }
@@ -153,8 +156,6 @@ $app.addEventListener("click", async (e) => {
     case "wk-next": await loadFeed((S.feed?.week || 1) + 1); break;
     case "wk-now": await loadFeed(null); S.week = S.activeWeek; break;
     case "pl-pos": S.ui.plPos = v; S.ui.plMore = 1; render(); break;
-    case "pl-sort": S.ui.plSort = v; render(); break;
-    case "pl-filter": S.ui.plFilter = v; S.ui.plMore = 1; render(); break;
     case "pl-more": S.ui.plMore++; render(); break;
     case "cmp-mode": S.ui.cmpMode = !S.ui.cmpMode; if (!S.ui.cmpMode) S.ui.pick = []; render(); break;
     case "pick-cmp": { const i = S.ui.pick.indexOf(id); if (i >= 0) S.ui.pick.splice(i, 1); else { if (S.ui.pick.length >= 2) S.ui.pick.shift(); S.ui.pick.push(id); } render(); break; }
@@ -163,6 +164,7 @@ $app.addEventListener("click", async (e) => {
     case "moves-tab": S.ui.moves = v; render(); break;
     case "proof-pos": S.ui.proofPos = v; render(); break;
     case "theme": localStorage.setItem("sharpline.theme", v); applyTheme(); render(); break;
+    case "tint": try { localStorage.setItem("sharpline.tint", v === "on" ? "on" : "off"); } catch {} applyTheme(); render(); break;
     case "new-league": { const nl = newLeague(`League ${S.profile.leagues.length + 1}`); S.profile.leagues.push(nl); S.profile.active = nl.id; S.ui.editing = nl.id; commit(); break; }
     case "use-league": S.profile.active = id; S.ui.give = []; S.ui.get = []; S.ui.partner = ""; commit("League switched"); break;
     case "edit-league": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); break;
@@ -200,8 +202,8 @@ $app.addEventListener("click", async (e) => {
 // ---------------------------------------------------------------- form changes and search
 $app.addEventListener("change", (e) => {
   const el = e.target, b = el.dataset.bind;
-  if (el.tagName === "SELECT" && el.dataset.act === "pl-sort") { S.ui.plSort = el.value; render(); return; }
-  if (el.tagName === "SELECT" && el.dataset.act === "pl-filter") { S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
+  if (el.dataset.change === "pl-sort") { if (["proj", "experts", "gap"].includes(el.value)) S.ui.plSort = el.value; render(); return; }
+  if (el.dataset.change === "pl-filter") { if (["all", "free", "mine"].includes(el.value)) S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
   if (!b) return;
   const L = league(), E = editingLeague();
   if (b === "opponent") { L.opponent = el.value || null; commit(); return; }

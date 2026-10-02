@@ -9,14 +9,14 @@ export const axisMax = (prs, floor = 30) => Math.max(floor, Math.ceil((Math.max(
 
 // ---------- Quantile dotplot: 20 dots, each one is a 1-in-20 outcome (5% of games) ----------
 export const DOT = { W: 320, padL: 10, padR: 10, r: 5.6 };
-export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name = "", all = false } = {}) {
+export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name = "", all = false, range = null } = {}) {
   const { W, padL, padR, r } = DOT, d = 2 * r + 1.2;
   const vals = dotsOf(pr.mean, pr.sd, 20);
   const xs = (v) => padL + Math.max(0, Math.min(1, v / max)) * (W - padL - padR);
   const placed = [];
   vals.forEach((v, i) => { const x = xs(v); let lvl = 0; while (placed.some((p) => p.lvl === lvl && Math.abs(p.x - x) < d)) lvl++; placed.push({ x, lvl, v, i }); });
   const levels = Math.max(...placed.map((p) => p.lvl)) + 1;
-  const axisY = 10 + levels * d + 8, H = axisY + 30;
+  const axisY = 10 + levels * d + 8, H = axisY + 30 + (range ? 30 : 0);
   let ticks = "";
   for (let v = 0; v <= max; v += 5) {
     const big = v % 10 === 0, x = xs(v);
@@ -26,9 +26,16 @@ export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name
   const on = (v) => all || (threshold != null && v >= threshold);
   const circles = placed.map((p) => `<circle class="dot${on(p.v) ? " on" : ""}" data-v="${p.v.toFixed(2)}" cx="${p.x.toFixed(1)}" cy="${(axisY - 4.5 - r - p.lvl * d).toFixed(1)}" r="${r}" style="--i:${p.i}"/>`).join("");
   const tx = threshold != null ? xs(threshold) : -20;
+  // "Most weeks": a bracket under the axis spanning the middle 80% of outcomes, so the words in the sentence sit on the dots.
+  let brk = "";
+  if (range) {
+    const x1 = xs(range[0]), x2 = Math.max(xs(range[1]), x1 + 6), by = axisY + 38, text = `most weeks: ${f0(range[0])} to ${f0(range[1])}`, half = text.length * 3.3, mid = (x1 + x2) / 2;
+    const anchor = mid - half < 4 ? "start" : mid + half > W - 4 ? "end" : "middle", tx2 = anchor === "start" ? Math.max(4, x1) : anchor === "end" ? Math.min(W - 4, x2) : mid;
+    brk = `<g class="brk"><path d="M${x1.toFixed(1)} ${by - 5} V${by} H${x2.toFixed(1)} V${by - 5}"/><text class="brt" x="${tx2.toFixed(1)}" y="${by + 16}" text-anchor="${anchor}">${text}</text></g>`;
+  }
   return `<svg class="dotplot" id="${id}" ${color ? `style="--c:${color}" ` : ""}viewBox="0 0 ${W} ${H}" role="img" data-max="${max}" data-w="${W}" data-pl="${padL}" data-pr="${padR}" data-cap="${id}-cap" data-name="${esc(name)}"
     aria-label="Twenty dots. Each dot is one of twenty equally likely outcomes for ${esc(name)}, from ${f1(vals[0])} to ${f1(vals[19])} points.">
-    <line class="axis" x1="${padL}" x2="${W - padR}" y1="${axisY}" y2="${axisY}"/>${ticks}${circles}
+    <line class="axis" x1="${padL}" x2="${W - padR}" y1="${axisY}" y2="${axisY}"/>${ticks}${brk}${circles}
     <g class="thr" style="transform:translateX(${tx}px)"><line x1="0" x2="0" y1="2" y2="${axisY}"/><path d="M-6 ${axisY + 1} L6 ${axisY + 1} L0 ${axisY - 8} Z"/></g>
     <rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent"/></svg>`;
 }
@@ -60,32 +67,20 @@ export function drive(win, { you = "You", foe = "Opponent" } = {}) {
     <div class="yards" aria-hidden="true">${[10, 20, 30, 40, 50, 40, 30, 20, 10].map((n) => `<i>${n}</i>`).join("")}</div></div>`;
 }
 
-// ---------- The range in everyday words: a bad week, the average, a great week ----------
-export function rangeBar(pr, { max = 55 } = {}) {
-  const lo = Math.max(0, quantile(pr.mean, pr.sd, 0.1)), hi = quantile(pr.mean, pr.sd, 0.9), mid = pr.mean;
-  const at = (v) => (Math.max(0, Math.min(max, v)) / max) * 100;
-  const lab = (v, text, val) => `<div class="lab" style="left:clamp(34px, ${at(v).toFixed(1)}%, calc(100% - 34px))"><b>${val}</b>${text}</div>`;
-  return `<div class="rng2" role="img" aria-label="Most weeks scores between ${f0(lo)} and ${f0(hi)} points, averaging ${f1(mid)}">
-    <div class="trk"></div><div class="fill" style="left:${at(lo).toFixed(1)}%;width:${Math.max(2, at(hi) - at(lo)).toFixed(1)}%"></div><div class="mid" style="left:${at(mid).toFixed(1)}%"></div>
-    ${lab(lo, "bad week", f0(lo))}${lab(mid, "average", f1(mid))}${lab(hi, "great week", f0(hi))}</div>`;
-}
-
-// ---------- Waterfall: how the number is built (plain HTML so it wraps well on phones) ----------
-export function waterfall(rows, { total, unit = "pts" } = {}) {
-  let cum = 0; const seg = [];
-  for (const r of rows) {
-    if (r.kind === "start") { seg.push({ ...r, a: 0, b: r.v }); cum = r.v; }
-    else if (r.kind === "end") seg.push({ ...r, a: 0, b: r.v });
-    else { seg.push({ ...r, a: Math.min(cum, cum + r.v), b: Math.max(cum, cum + r.v) }); cum += r.v; }
-  }
-  const max = Math.max(...seg.map((s) => s.b), 1) * 1.12;
-  return `<div class="wf" role="list">${seg.map((s) => {
-    const left = (s.a / max) * 100, width = Math.max(0.8, ((s.b - s.a) / max) * 100);
-    const cls = s.kind === "start" ? "base" : s.kind === "end" ? "final" : s.v >= 0 ? "up" : "down";
-    const val = s.kind === "delta" ? (Math.abs(s.v) < 0.05 ? "no change" : `${s.v > 0 ? "+" : "−"}${Math.abs(s.v).toFixed(1)}`) : f1(s.v);
-    return `<div class="wf-row ${cls}" role="listitem"><div class="wf-l">${s.label}${s.note ? `<small>${s.note}</small>` : ""}</div>
-      <div class="wf-t"><i style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></i></div><div class="wf-v">${val}</div></div>`;
-  }).join("")}</div>`;
+// ---------- How the number is built ----------
+// The starting point and the result are plain numbers. Every adjustment between them is drawn on its own zoomed scale
+// (the longest bar is the biggest adjustment), growing right for an increase and left for a decrease from a center line,
+// so a half-point change reads as clearly as a two-point one. The chart says it is zoomed, so nobody mistakes it for the whole.
+export function waterfall(rows) {
+  const big = Math.max(...rows.filter((r) => r.kind === "delta").map((d) => Math.abs(d.v)), 0.05);
+  const label = (r) => `<div class="wf-l">${r.label}${r.note ? `<small>${r.note}</small>` : ""}</div>`;
+  const body = rows.map((r) => {
+    if (r.kind === "start" || r.kind === "end") return `<div class="wf-row anchor ${r.kind === "start" ? "base" : "final"}" role="listitem">${label(r)}<div class="wf-v">${f1(r.v)}</div></div>`;
+    const none = Math.abs(r.v) < 0.05, up = r.v >= 0, w = none ? 0 : Math.max(3, (Math.abs(r.v) / big) * 50);
+    const val = none ? "no change" : `${up ? "+" : "−"}${Math.abs(r.v).toFixed(1)}`;
+    return `<div class="wf-row ${none ? "flat" : up ? "up" : "down"}" role="listitem">${label(r)}<div class="wf-t" aria-hidden="true">${none ? "" : `<i style="${up ? "left" : "right"}:50%;width:${w.toFixed(1)}%"></i>`}</div><div class="wf-v"><span class="sr">${none ? "no change" : up ? "adds" : "subtracts"} </span>${val}</div></div>`;
+  }).join("");
+  return `<div class="wf" role="list">${body}</div><p class="small muted" style="margin-top:10px">Each bar is zoomed to the biggest adjustment (${big.toFixed(1)} points), so small changes stay easy to see.</p>`;
 }
 
 // ---------- Percentile bar (a stat, ranked among his position) ----------
@@ -168,12 +163,21 @@ export function rankRange(ecr, ours, N = 36) {
 
 // ---------- Mirrored comparison bars (winner solid, loser faded) ----------
 export function mirrorRows(rows, { ta = "", tb = "" } = {}) {
+  // Side by side: the better value in each row is a solid bar, the other an outline. Bars are scaled to the better value,
+  // so it always fills its half. For ranks, lower is better, so the bar grows as the rank number shrinks. If either side has
+  // no number, the row shows both values and no bars, because there is nothing to compare.
+  const has = (v) => typeof v === "number" && isFinite(v);
   return `<div class="mirror"${ta ? ` style="--ta:${ta};--tb:${tb}"` : ""}>${rows.map((r) => {
-    const a = r.a ?? 0, b = r.b ?? 0, m = Math.max(Math.abs(a), Math.abs(b), 1e-9);
-    const better = r.lowerBetter ? (a < b ? "a" : b < a ? "b" : "") : (a > b ? "a" : b > a ? "b" : "");
-    return `<div class="mr"><div class="mv a ${better === "a" ? "win" : ""}">${r.fa ?? f1(a)}</div>
-      <div class="mb a ${better === "a" ? "win" : ""}"><i style="width:${(Math.abs(a) / m) * 100}%"></i></div><div class="ml">${r.label}</div>
-      <div class="mb b ${better === "b" ? "win" : ""}"><i style="width:${(Math.abs(b) / m) * 100}%"></i></div><div class="mv b ${better === "b" ? "win" : ""}">${r.fb ?? f1(b)}</div></div>`;
+    const okA = has(r.a), okB = has(r.b), both = okA && okB, tol = r.tol ?? 0.05;
+    let wa = 0, wb = 0, better = "";
+    if (both) {
+      if (r.lowerBetter) { const lo = Math.min(r.a, r.b); wa = lo / r.a; wb = lo / r.b; }
+      else { const m = Math.max(Math.abs(r.a), Math.abs(r.b), 1e-9); wa = Math.abs(r.a) / m; wb = Math.abs(r.b) / m; }
+      better = Math.abs(r.a - r.b) < tol ? "tie" : (r.lowerBetter ? r.a < r.b : r.a > r.b) ? "a" : "b";
+    }
+    const win = (s) => better === s || better === "tie", fa = okA ? (r.fa ?? f1(r.a)) : "–", fb = okB ? (r.fb ?? f1(r.b)) : "–";
+    const bar = (s, w) => `<div class="mb ${s}${win(s) ? " win" : ""}">${both ? `<i style="width:${Math.max(4, w * 100).toFixed(1)}%"></i>` : ""}</div>`;
+    return `<div class="mr"><div class="mv a${win("a") ? " win" : ""}">${fa}</div>${bar("a", wa)}<div class="ml">${r.label}</div>${bar("b", wb)}<div class="mv b${win("b") ? " win" : ""}">${fb}</div></div>`;
   }).join("")}</div>`;
 }
 

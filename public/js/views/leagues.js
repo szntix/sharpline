@@ -1,6 +1,7 @@
 import { S, league, commit, render, pl, pname, invalidate } from "../state.js";
 import { sleeperApi } from "../api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
+import { VERSION, BUILT } from "../version.js";
 import { esc, uid, toast, ago } from "../ui.js";
 import { sec } from "./shared.js";
 
@@ -63,9 +64,11 @@ function viewAccount() {
   const F = S.feed, th = themeNow();
   return `<section class="sec"><header><h2 class="h2">Account and data</h2><span class="aside" id="savedot">${S.saveState === "saving" ? "Saving…" : S.saveState === "error" ? "Not saved" : "Saved"}</span></header><div class="panel stack">
     <div><div class="small muted" style="margin-bottom:6px">Appearance</div><div class="seg" role="group" aria-label="Theme">${[["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${th === k}">${l}</button>`).join("")}</div></div>
-    <dl class="kv"><dt>Signed in as</dt><dd>${esc(S.user)}</dd><dt>Season and week</dt><dd>${F ? `${F.season}, week ${F.week}` : "–"}</dd><dt>Data checked</dt><dd>${F ? ago(F.fetchedAt) : "–"}</dd><dt>Game logs through week</dt><dd>${S.usage?.throughWeek ?? "–"}</dd></dl>
+    <dl class="kv"><dt>App version</dt><dd>${VERSION} (${BUILT})</dd><dt>Signed in as</dt><dd>${esc(S.user)}</dd><dt>Season and week</dt><dd>${F ? `${F.season}, week ${F.week}` : "–"}</dd><dt>Data checked</dt><dd>${F ? ago(F.fetchedAt) : "–"}</dd><dt>Game logs through week</dt><dd>${S.usage?.throughWeek ?? "–"}</dd></dl>
     <div class="toolbar"><button class="btn" data-act="reload">Check for new data</button><button class="btn" data-act="signout">Sign out</button></div>
-    <p class="small muted">Data refreshes on its own. The button asks the server for the latest right now.</p></div></section>`;
+    <p class="small muted">Data refreshes on its own. The button asks the server for the latest right now.</p>
+      <div><div class="small muted" style="margin-bottom:6px">Team color on player rows</div><div class="seg" role="group" aria-label="Team color on player rows">${[["off", "Off"], ["on", "On"]].map(([k, l]) => `<button data-act="tint" data-v="${k}" aria-pressed="${(document.documentElement.dataset.tint || "off") === k}">${l}</button>`).join("")}</div>
+      <p class="small muted" style="margin-top:6px">On tints each row with its team's color. Off keeps rows plain, with the team shown as the stripe on the left.</p></div></div></section>`;
 }
 
 // ---- Sleeper import ----

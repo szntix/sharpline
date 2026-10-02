@@ -7,7 +7,9 @@ export function viewPlayers() {
   if (!S.players || !S.feed) return feedError() + loading("players");
   const C = computed(), L = league(), P = C.P;
   const slots = leagueOrDefault().slots, avail = positionsFor(slots), usable = usablePositions(slots);
-  if (!avail.includes(S.ui.plPos)) S.ui.plPos = "ALL";      // the league changed and the chosen tab no longer applies
+  if (!avail.includes(S.ui.plPos)) S.ui.plPos = "ALL";
+  if (!["proj", "experts", "gap"].includes(S.ui.plSort)) S.ui.plSort = "proj";
+  if (!["all", "free", "mine"].includes(S.ui.plFilter)) S.ui.plFilter = "all";      // the league changed and the chosen tab no longer applies
   const { plPos, plSort, plQ, plFilter } = S.ui;
   const taken = new Set(L ? [...L.roster, ...(L.taken || []), ...L.others.flatMap((o) => o.roster)] : []);
   let ids = Object.keys(P.proj).filter((id) => {
@@ -20,7 +22,7 @@ export function viewPlayers() {
     if (L && plFilter === "free" && taken.has(id)) return false;
     return true;
   });
-  const key = { proj: (id) => -P.proj[id].mean, experts: (id) => C.ranks.exp[id] ? C.ranks.exp[id] + (pl(id).p === "QB" ? 0 : 0) : 999, gap: (id) => -((P.proj[id].model ?? P.proj[id].mean) - (P.proj[id].experts ?? P.proj[id].mean)) }[plSort];
+  const key = { proj: (id) => -P.proj[id].mean, experts: (id) => C.ranks.exp[id] ? C.ranks.exp[id] + (pl(id).p === "QB" ? 0 : 0) : 999, gap: (id) => -((P.proj[id].model ?? P.proj[id].mean) - (P.proj[id].experts ?? P.proj[id].mean)) }[plSort] || ((id) => -P.proj[id].mean);
   ids.sort((a, b) => key(a) - key(b) || P.proj[b].mean - P.proj[a].mean);
   const shown = ids.slice(0, 40 * S.ui.plMore);
   const kdef = plPos === "K" || plPos === "DEF", word = plPos === "K" ? "kickers" : "defenses";
@@ -31,7 +33,7 @@ export function viewPlayers() {
   const seg = (name, cur, opts, act, cls = () => "") => `<div class="seg" role="group" aria-label="${name}">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${cls(v)}" aria-pressed="${cur === v}">${l}</button>`).join("")}</div>`;
   const pick = S.ui.pick, pickMode = S.ui.cmpMode || pick.length > 0;
   const opt = (v, l, cur) => `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`;
-  const band = `<div class="band"><span class="bsel"><span class="lab">Sort</span><select data-act="pl-sort" aria-label="Sort players">${opt("proj", "Best projection", plSort)}${opt("experts", "Expert rank", plSort)}${opt("gap", "We like more", plSort)}</select></span>${L ? `<span class="bsel"><span class="lab">Show</span><select data-act="pl-filter" aria-label="Show players">${opt("all", "Everyone", plFilter)}${opt("free", "Free agents", plFilter)}${opt("mine", "My team", plFilter)}</select></span>` : ""}</div>`;
+  const band = `<div class="band"><span class="bsel"><span class="lab">Sort</span><select data-change="pl-sort" aria-label="Sort players">${opt("proj", "Best projection", plSort)}${opt("experts", "Expert rank", plSort)}${opt("gap", "We like more", plSort)}</select></span>${L ? `<span class="bsel"><span class="lab">Show</span><select data-change="pl-filter" aria-label="Show players">${opt("all", "Everyone", plFilter)}${opt("free", "Free agents", plFilter)}${opt("mine", "My team", plFilter)}</select></span>` : ""}</div>`;
   const CMP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg>`;
   return `${feedError()}<div class="titlerow"><h1 class="h1">Players</h1><span class="muted small">Week ${S.feed.week} · ${L ? esc(L.name) : "standard PPR"} scoring</span></div>${pulse(S.feed)}${expertsNote(S.feed)}
     <div class="stack" style="margin-top:14px">

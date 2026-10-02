@@ -62,9 +62,13 @@ A quiet neutral frame with turf green as the brand, and color only where it carr
 - **Frame:** soft neutrals in light and dark, 1 px outlines, a faint shadow in light mode. A stronger edge is kept only where a boundary is what identifies a control or a selected state. Selection is a raised pill, and position bars take that position's color.
 - **Sizes:** nothing under 12 px, controls 44 px tall (segments at least 40 px wide), and 7 to 8 player rows fit on a 390 by 844 phone.
 - **Rows:** every row is a solid slate color and exactly two lines, so nothing is taller than anything else. The team shows only as a stripe on the left edge, beside its logo plate. Injury status is the ring chip beside the name; any other condition is at most two short tags on the right of the second line (Shootout, Model +4.5, Running hot). The full sentence for each tag is on the player page and is read out to screen readers.
-- **Slate bars:** each side's bar is one flat color from its own expected points on the red-to-green scale (about 16 low, 23 average, 30 high), and the notch in the middle marks an even split.
-- **Sub-menus:** every segmented bar is full width, so stacked bars share the same edges at any screen size.
-- **Range:** the likely range is not shown on list rows (how wide it is follows almost entirely from the projection). The player page shows it in plain words: a bad week, the average, a great week.
+- **Slate bars:** each side's bar is its team's color (chosen to stay visible in light and dark), the bar splits the game's expected points between the two teams, and the notch in the middle marks an even split.
+- **Side by side (Compare):** in each row the better value is a solid bar in that player's team color and fills its half; the other is an outline at its true proportion. For expert rank, lower is better, so the bar grows as the rank number shrinks. If either side has no number, the row shows both values and no bars.
+- **Team color on rows:** off by default (plain slate rows with a team stripe). Leagues, Account and data, has a switch at the bottom to tint each row and the player card with the team's color; the choice is remembered on the device.
+- **Dropdowns:** Sort and Show act only when an option is chosen (`data-change`), never on the tap that opens them, so opening and dismissing a dropdown changes nothing.
+- **Version:** the build number shows in Leagues, Account and data, on any error screen, and at `/version.json`, so it is always clear which build is live.
+- **Sub-menus:** every segmented bar is full width, so stacked bars share the same edges at any screen size, and a segment can never be narrower than its own label (the selected pill always encloses its text). Screens down to 320 px wide fit without sideways scrolling.
+- **Range:** the likely range is not shown on list rows (how wide it is follows almost entirely from the projection). On the player page it is a "most weeks" bracket drawn under the dotplot's axis, spanning the middle 80% of the dots, so the words sit on the data. The hero is just the projected number.
 - **Slate:** a ranked game list first, with the scatter map one tap away.
 
 Colors and sizes live in `public/styles.css`. Team colors are in `public/js/teams.js`. The red-to-green scale is `chanceColor` in `public/js/charts.js`.

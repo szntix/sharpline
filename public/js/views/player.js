@@ -3,7 +3,7 @@ import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
 import { signals, statusText } from "../engine.js";
 import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe } from "../ui.js";
-import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots, rangeBar } from "../charts.js";
+import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots } from "../charts.js";
 import { quantile } from "../engine.js";
 import { loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
 
@@ -35,7 +35,7 @@ export function viewPlayer(id) {
   const out = pr && !(pr.mean > 0);
   const head = out
     ? `<div class="hero-num" style="font-size:60px">${pr.bye ? "Bye" : pr.status || "No line"}</div><p style="margin-top:6px">${pr.bye ? "Not playing this week." : pr.status ? esc(statusText(pr)) : "No projection yet."}</p>`
-    : `<div class="pj"><div class="hero-num">${f1(pr.mean)}</div><div class="rng">Most weeks, <b>${f0(quantile(pr, 0.1))} to ${f0(quantile(pr, 0.9))}</b><br>points in ${L ? "your" : "standard PPR"} scoring.<br>${pr.status ? esc(statusText(pr)) : ""}</div></div>${rangeBar(pr, { max: axisMax([pr]) })}`;
+    : `<div class="pj"><div class="hero-num">${f1(pr.mean)}</div><div class="rng">projected points<br>in ${L ? "your" : "standard PPR"} scoring${pr.status ? `<br>${esc(statusText(pr))}` : ""}</div></div>`;
   const ctxBits = [`${posLabel(pos)}, ${esc(p.t || "free agent")}${AGE(p)}`];
   if (g && pos !== "DEF") ctxBits.push(`${g.home === p.t ? "vs" : "at"} ${esc(pr.opp)}, ${esc(kickoffText(g))}`);
   if (pr?.spread != null && pr.total != null) ctxBits.push(`${esc(p.t)} ${pr.spread >= 0 ? "favored by " + pr.spread : "underdog by " + -pr.spread}, total ${pr.total}`);
@@ -50,7 +50,7 @@ export function viewPlayer(id) {
 
   // 1. How likely is a big game
   const thr = S.ui.thr[id] ?? defaultThr(pr, pos), opts = thrOptions(pr), max = axisMax([pr]);
-  const likely = sec("How likely is a big game?", `${dotplot(pr, { max, threshold: thr, id: "dp-" + id, name: p.n })}
+  const likely = sec("How likely is a big game?", `${dotplot(pr, { max, threshold: thr, id: "dp-" + id, name: p.n, range: [Math.max(0, quantile(pr, 0.1)), quantile(pr, 0.9)] })}
     <div class="cap" id="dp-${id}-cap">${dotCaption(pr, thr, p.n.split(" ")[0])}</div>
     <div class="thresholds" data-for="dp-${id}">${opts.map((t) => `<button data-thr="${t}" aria-pressed="${t === thr}">${t}+</button>`).join("")}</div>
     <p class="small muted" style="margin-top:10px">Each dot is one of 20 equally likely outcomes. Drag the line to ask a different question. Ranges were checked against five seasons of results: the real score landed inside the 10th-to-90th range about 80% of the time.</p>`);

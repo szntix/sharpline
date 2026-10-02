@@ -11,7 +11,7 @@ export function pulse(feed) {
   const src = feed.sources || [];
   const waiting = src.filter((s) => s.status === "missing" || s.status === "stale").length;
   const broken = src.filter((s) => s.status === "broken").length;
-  const label = broken ? `${broken} source${broken > 1 ? "s" : ""} changed format` : waiting ? `${waiting} of ${src.length} sources waiting` : `Live data, checked ${agoShort(feed.fetchedAt)} ago`;
+  const label = broken ? `${broken} source${broken > 1 ? "s" : ""} changed format` : waiting ? `${waiting} of ${src.length} sources waiting` : `Live data, checked ${ago(feed.fetchedAt)}`;
   return `<details class="pulse"><summary><span class="pdots" aria-hidden="true">${src.map((s) => `<i class="${s.status}"></i>`).join("")}</span>${esc(label)}</summary>
     <div class="plist">${src.map((s) => `<div class="pr"><i class="${s.status}"></i><div>${esc(s.label)}<small>${esc(s.note)}</small></div><time>${s.asOf ? agoShort(s.asOf) : "waiting"}</time></div>`).join("")}
     <div class="pr"><i class="${S.usage ? "fresh" : "missing"}"></i><div>Game logs<small>${S.usage ? `Through week ${S.usage.throughWeek}, nflverse` : "Not loaded"}</small></div><time>${S.usage ? agoShort(S.usage.asOf) : "waiting"}</time></div></div></details>`;
@@ -30,22 +30,27 @@ export function feedError() {
   return S.errors.feed ? `<div class="banner err" role="alert" style="margin-bottom:12px">Couldn't reach the data feed: ${esc(S.errors.feed)}. What you see may be out of date. <button class="link" data-act="reload">Try again</button></div>` : "";
 }
 
-// One player row: team plate (or compare checkbox), name with a position chip, one number. The team shows as a stripe and a faint tint.
+// One player row, always two lines so every row is the same size: the name, position and status on top, and below it
+// the game on the left with at most two short condition tags on the right. The full sentence for each tag is on the
+// player page and is read out to screen readers. The team shows as a stripe on the left edge.
 export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, extra = "", showExp = false } = {}) {
   const p = pl(id), pr = C.P.proj[id]; if (!p) return "";
   const pos = p.p, g = pr?.game;
   const where = pos === "DEF" || !p.t ? "" : pr?.bye ? "Bye week" : pr?.opp ? `${g.home === p.t ? "vs" : "at"} ${pr.opp} · ${kickoffText(g)}` : "";
   const exp = showExp && C.ranks.exp[id] ? ` · experts ${posLabel(pos)}${C.ranks.exp[id]}` : "";
-  const sigs = sig ? signals(id, C.c, C.P).filter((s) => s.t !== "info").slice(0, 2) : [];
   const note = SRC_NOTE[pr?.src] || "";
   const chip = statusChip(pr?.status, pr?.practice);
+  const gain = String(extra || "").replace(/^[,\s]+/, "");
+  const tags = gain ? [] : (sig ? signals(id, C.c, C.P).filter((x) => x.k).slice(0, 2) : []);
+  const tagHtml = gain ? `<span class="tag ${/^\+/.test(gain) ? "up" : "flat"}"><i></i>${esc(gain)}</span>`
+    : tags.map((x, n) => `<span class="tag ${x.t}${n ? " t2" : ""}" title="${esc(x.s)}"><i></i>${esc(x.k)}<span class="sr">: ${esc(x.s)}</span></span>`).join("");
   const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
     : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
   return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
     ${lead}
-    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span><span class="meta">${esc(p.t || "FA")}${where ? ` · ${esc(where)}` : ""}${exp}${extra}</span></div>
-    <div class="proj"><span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span>${note ? `<small>${esc(note)}</small>` : ""}</div>
-    ${sigs.length ? `<div class="sigs">${sigs.map((s) => `<span class="${s.t}">${esc(s.s)}</span>`).join("")}</div>` : ""}
+    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
+      <span class="sub"><span class="meta">${esc(where || p.t || "FA")}${exp}</span>${tagHtml ? `<span class="tags">${tagHtml}</span>` : ""}</span></div>
+    <div class="proj"><span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${note ? esc(note) : "&nbsp;"}</small></div>
     ${act ? `<div class="act">${act}</div>` : ""}</div>`;
 }
 export const ribbonMax = (prs) => Math.max(30, Math.ceil(Math.max(...prs.map((p) => (p ? p.mean + 1.7 * p.sd : 0)), 0) / 10) * 10);

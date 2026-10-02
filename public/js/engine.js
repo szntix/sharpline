@@ -345,36 +345,36 @@ function teamLeaders(ctx) {
 export function signals(id, ctx, P) {
   const p = ctx.players[id], pr = P.proj[id], u = ctx.usage?.players?.[id], out = [];
   if (!p || !pr) return out;
-  if (pr.bye) out.push({ t: "warn", s: "On bye this week" });
-  if (pr.status || pr.practice === "DNP") out.push({ t: availMult(pr.status) === 0 ? "down" : "warn", s: statusText(pr) });
+  if (pr.bye) out.push({ t: "warn", s: "On bye this week", k: null });
+  if (pr.status || pr.practice === "DNP") out.push({ t: availMult(pr.status) === 0 ? "down" : "warn", s: statusText(pr), k: null });
   if (pr.experts != null && pr.model != null && pr.mean > 0) {
     const d = pr.model - pr.experts;
-    if (Math.abs(d) >= 2.5) out.push({ t: d > 0 ? "up" : "down", s: `Our stat model is ${Math.abs(d).toFixed(1)} points ${d > 0 ? "above" : "below"} the experts` });
+    if (Math.abs(d) >= 2.5) out.push({ t: d > 0 ? "up" : "down", s: `Our stat model is ${Math.abs(d).toFixed(1)} points ${d > 0 ? "above" : "below"} the experts`, k: `Model ${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}` });
   }
   if (u && u.log?.length >= 4 && p.p !== "QB") {
     const key = p.p === "RB" ? 3 : 2, name = p.p === "RB" ? "Carries" : "Targets";
     const last = avg(u.log.slice(-2).map((l) => l[key])), before = avg(u.log.slice(0, -2).map((l) => l[key]));
-    if (last - before >= (p.p === "RB" ? 3.5 : 2.5) && last >= (p.p === "RB" ? 10 : 5)) out.push({ t: "up", s: `${name} rising: ${last.toFixed(1)} a game the last two weeks, ${before.toFixed(1)} before` });
-    if (before - last >= (p.p === "RB" ? 4 : 3)) out.push({ t: "down", s: `${name} falling: ${last.toFixed(1)} a game the last two weeks, ${before.toFixed(1)} before` });
+    if (last - before >= (p.p === "RB" ? 3.5 : 2.5) && last >= (p.p === "RB" ? 10 : 5)) out.push({ t: "up", s: `${name} rising: ${last.toFixed(1)} a game the last two weeks, ${before.toFixed(1)} before`, k: `${name} up` });
+    if (before - last >= (p.p === "RB" ? 4 : 3)) out.push({ t: "down", s: `${name} falling: ${last.toFixed(1)} a game the last two weeks, ${before.toFixed(1)} before`, k: `${name} down` });
   }
   if (u && u.g >= 3 && ["RB", "WR", "TE"].includes(p.p)) {
     const x = xppr(p.p, u.tgt, u.car), gap = x != null ? u.form - x : 0;
-    if (gap >= 3) out.push({ t: "down", s: `Scoring ${gap.toFixed(1)} a game more than his workload usually earns. That tends to fade.` });
-    if (gap <= -3) out.push({ t: "up", s: `Scoring ${(-gap).toFixed(1)} a game less than his workload usually earns. That tends to correct.` });
+    if (gap >= 3) out.push({ t: "down", s: `Scoring ${gap.toFixed(1)} a game more than his workload usually earns. That tends to fade.`, k: "Running hot" });
+    if (gap <= -3) out.push({ t: "up", s: `Scoring ${(-gap).toFixed(1)} a game less than his workload usually earns. That tends to correct.`, k: "Running cold" });
   }
   const lead = teamLeaders(ctx)[p.t];
   if (lead && lead.id !== id && ["WR", "RB"].includes(p.p)) {
     const L = ctx.players[lead.id], sts = pr.game ? (ctx.feed?.injuries?.players?.[lead.id]?.s || L?.i) : null;
     if (L && ["Out", "IR", "Doubtful", "PUP", "Sus"].includes(sts)) {
       const r = STUDY.targetLeaderOut[p.p];
-      out.push({ t: "up", s: `${L.n}, the team's target leader, is ${String(sts).toLowerCase()}. ${p.p === "WR" ? "Receivers" : "Running backs"} have seen about ${r.lift}% more target share in that spot (${r.n} past cases).` });
+      out.push({ t: "up", s: `${L.n}, the team's target leader, is ${String(sts).toLowerCase()}. ${p.p === "WR" ? "Receivers" : "Running backs"} have seen about ${r.lift}% more target share in that spot (${r.n} past cases).`, k: "Target boost" });
     }
   }
   if (pr.total != null && ["QB", "WR", "TE"].includes(p.p)) {
-    if (pr.total >= 49) out.push({ t: "up", s: `Game total ${pr.total}: the market expects a shootout` });
-    else if (pr.total <= 38.5) out.push({ t: "down", s: `Game total ${pr.total}: the market expects a low-scoring game` });
+    if (pr.total >= 49) out.push({ t: "up", s: `Game total ${pr.total}: the market expects a shootout`, k: "Shootout" });
+    else if (pr.total <= 38.5) out.push({ t: "down", s: `Game total ${pr.total}: the market expects a low-scoring game`, k: "Low total" });
   }
-  if (pr.wx && p.p === "QB" && pr.wx.wind >= 15) out.push({ t: "down", s: `${pr.wx.wind} mph wind at kickoff. Quarterbacks have scored less in wind like this.` });
+  if (pr.wx && p.p === "QB" && pr.wx.wind >= 15) out.push({ t: "down", s: `${pr.wx.wind} mph wind at kickoff. Quarterbacks have scored less in wind like this.`, k: "Windy" });
   const tr = ctx.trending?.[id]; if (tr >= 500) out.push({ t: "info", s: `Added in ${tr.toLocaleString()} Sleeper leagues in the last day` });
   return out;
 }
