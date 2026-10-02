@@ -8,7 +8,21 @@ export const logoUrl = (abbr) => (TEAMS[abbr] ? LOGO(TEAMS[abbr].logo) : "");
 // Black or white text, whichever reads better on a color.
 const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 export const inkOn = (h) => ((lum(h) + 0.05) / 0.0556 >= 1.05 / (lum(h) + 0.05) ? "#111111" : "#FFFFFF");
+// Text on a team-color plate or panel needs 4.5:1. Mid-tone brand colors (a few blues and reds) cannot reach it with either white or
+// black text, so the color is nudged a few steps toward whichever extreme helps, and only for those teams. The stripe keeps the exact brand color.
+const toRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)), toHex = (a) => "#" + a.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const contrastWith = (h, ink) => { const a = lum(h), b = lum(ink); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+export function readablePlate(h, target = 4.7) {
+  let c = toRgb(h);
+  for (let i = 0; i < 60; i++) {
+    const hex = toHex(c), ink = inkOn(hex);
+    if (contrastWith(hex, ink) >= target) return hex.toUpperCase();
+    const to = ink === "#FFFFFF" ? [0, 0, 0] : [255, 255, 255]; c = c.map((v, k) => v * 0.985 + to[k] * 0.015);
+  }
+  return h;
+}
 export function teamColors(abbr, dark) {
   const t = TEAMS[abbr]; if (!t) return { stripe: "var(--edge)", plate: "var(--hair2)", plateInk: "var(--ink)" };
-  return { stripe: (dark ? t.d : t.l) || t.p, plate: t.p, plateInk: inkOn(t.p) };
+  const plate = readablePlate(t.p);
+  return { stripe: (dark ? t.d : t.l) || t.p, plate, plateInk: inkOn(plate) };
 }

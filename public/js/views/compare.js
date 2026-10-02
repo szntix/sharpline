@@ -2,9 +2,9 @@ import { S, computed, pl } from "../state.js";
 import { duel, duelRecord, xppr } from "../model.js";
 import { pairCorr } from "../research.js";
 import { quantile } from "../engine.js";
-import { esc, f1, f0, pct, posLabel, kickoffText, plate, isDark } from "../ui.js";
+import { esc, f1, f0, pct, posLabel, kickoffText, plate, emblem, isDark } from "../ui.js";
 import { teamColors } from "../teams.js";
-import { dotplot, axisMax, mirrorRows } from "../charts.js";
+import { dotplot, dotCaption, axisMax, mirrorRows } from "../charts.js";
 import { loading, feedError, sec } from "./shared.js";
 
 function picker(a) {
@@ -27,6 +27,7 @@ export function viewCompare(a, b) {
   const recent = pa.p === pb.p ? duelRecord(pa.p, gap) : null;
   const max = axisMax([A, B]), dk = isDark(), tA = teamColors(pa.t, false), tB = teamColors(pb.t, false), vA = teamColors(pa.t, dk).stripe, vB = teamColors(pb.t, dk).stripe;
   const short = (n) => n.split(" ").slice(-1)[0];
+  const mid = (A.mean + B.mean) / 2, t0 = Math.max(5, Math.round(mid / 5) * 5), gkey = `cmp-${a}-${b}`, thr = S.ui.thr[gkey] ?? t0, opts = [...new Set([Math.max(5, t0 - 5), t0, t0 + 5, t0 + 10])];
   const u = (id) => S.usage?.players?.[id];
   const rows = [
     { label: "Projection", a: A.mean, b: B.mean },
@@ -44,13 +45,17 @@ export function viewCompare(a, b) {
   if (leader[0] === a ? fa < fb - 1.5 : fb < fa - 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher floor, so he's the safer pick if you're protecting a lead.`);
   if (leader[0] === a ? cb > ca + 1.5 : ca > cb + 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher ceiling, so he's the swing if you need a big game.`);
   return `<a class="link" href="#compare" style="display:inline-block;margin:6px 0">Change players</a>
-    <div class="vs-head" style="--ta:${tA.plate};--tai:${tA.plateInk};--tb:${tB.plate};--tbi:${tB.plateInk}"><div class="a"><div class="n">${esc(pa.n)}</div><div class="p">${esc(pa.t || "FA")}, ${A.opp ? `${A.game.home === pa.t ? "vs" : "at"} ${esc(A.opp)}` : "no game"}</div><div class="pr">${f1(A.mean)}</div></div>
+    <div class="vs-head" style="--ta:${tA.plate};--tai:${tA.plateInk};--tb:${tB.plate};--tbi:${tB.plateInk}"><div class="a">${emblem(pa.t)}<div class="n">${esc(pa.n)}</div><div class="p">${esc(pa.t || "FA")}, ${A.opp ? `${A.game.home === pa.t ? "vs" : "at"} ${esc(A.opp)}` : "no game"}</div><div class="pr">${f1(A.mean)}</div></div>
       <div class="mid"><div><span class="num">${Math.round(pA * 100)}%</span><small>${esc(short(pa.n))} scores more</small></div></div>
-      <div class="b"><div class="n">${esc(pb.n)}</div><div class="p">${esc(pb.t || "FA")}, ${B.opp ? `${B.game.home === pb.t ? "vs" : "at"} ${esc(B.opp)}` : "no game"}</div><div class="pr">${f1(B.mean)}</div></div></div>
+      <div class="b">${emblem(pb.t)}<div class="n">${esc(pb.n)}</div><div class="p">${esc(pb.t || "FA")}, ${B.opp ? `${B.game.home === pb.t ? "vs" : "at"} ${esc(B.opp)}` : "no game"}</div><div class="pr">${f1(B.mean)}</div></div></div>
     <div class="callout" style="margin-top:14px">${verdict.map((v) => `<p>${v}</p>`).join("")}</div>
-    ${sec("If this week were played 20 times", `<div class="toolbar" style="gap:8px;margin-bottom:2px">${plate(pa.t)}<b>${esc(pa.n)}</b></div>${dotplot(A, { max, color: vA, all: true, id: "cmpA", name: pa.n })}
-      <div class="toolbar" style="gap:8px;margin:12px 0 2px">${plate(pb.t)}<b>${esc(pb.n)}</b></div>${dotplot(B, { max, color: vB, all: true, id: "cmpB", name: pb.n })}
-      <p class="small muted" style="margin-top:10px">Same ruler for both. The more spread out the dots, the less predictable the week.</p>`)}
+    ${sec("If this week were played 20 times", `<p class="small muted" style="margin-bottom:8px">Pick a score, or drag the line on either plot. Filled dots reach it.</p>
+      <div class="thresholds" data-for="cmpA" role="group" aria-label="Score to reach">${opts.map((t) => `<button data-thr="${t}" aria-pressed="${t === thr}">${t}+</button>`).join("")}</div>
+      <div class="toolbar" style="gap:8px;margin:14px 0 2px">${plate(pa.t, { mono: true })}<b>${esc(pa.n)}</b></div>${dotplot(A, { max, color: vA, threshold: thr, id: "cmpA", name: pa.n, group: gkey, who: short(pa.n) })}
+      <div class="cap" id="cmpA-cap">${dotCaption(A, thr, short(pa.n))}</div>
+      <div class="toolbar" style="gap:8px;margin:16px 0 2px">${plate(pb.t, { mono: true })}<b>${esc(pb.n)}</b></div>${dotplot(B, { max, color: vB, threshold: thr, id: "cmpB", name: pb.n, group: gkey, who: short(pb.n) })}
+      <div class="cap" id="cmpB-cap">${dotCaption(B, thr, short(pb.n))}</div>
+      <p class="small muted" style="margin-top:10px">Same ruler and the same line for both. The more spread out the dots, the less predictable the week.</p>`)}
     ${sec("Side by side", mirrorRows(rows, { ta: vA, tb: vB }) + `<p class="small muted" style="margin-top:10px">The solid bar wins each row. A bad week and a great week are the 1-in-10 outcomes. For expert rank, lower is better.</p>`, "Solid bar wins")}
     ${sec("How much to trust this", `<p>${recent ? `Across ${recent.n.toLocaleString()} past ${posLabel(pa.p)} pairings with a gap like this (${recent.gap[0]} to ${recent.gap[1] > 50 ? "more than 8" : recent.gap[1]} projected points), the higher-projected player scored more <b>${Math.round(recent.higher_wins * 100)}%</b> of the time.` : "Different positions can't be checked against past pairings, so this percentage uses the average of the two positions' history."} Projections narrow the odds but never settle them: even an 8-point edge loses about one time in seven.</p>
       ${rho ? `<p class="small muted" style="margin-top:8px">These two are ${A.team === B.team ? "teammates" : "opponents"}, so their scores tend to move ${rho > 0 ? "together" : "against each other"} (correlation ${rho.toFixed(2)}). That is included.</p>` : ""}`)}`;

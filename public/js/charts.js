@@ -9,7 +9,7 @@ export const axisMax = (prs, floor = 30) => Math.max(floor, Math.ceil((Math.max(
 
 // ---------- Quantile dotplot: 20 dots, each one is a 1-in-20 outcome (5% of games) ----------
 export const DOT = { W: 320, padL: 10, padR: 10, r: 5.6 };
-export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name = "", all = false, range = null } = {}) {
+export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name = "", all = false, range = null, group = "", who = "" } = {}) {
   const { W, padL, padR, r } = DOT, d = 2 * r + 1.2;
   const vals = dotsOf(pr.mean, pr.sd, 20);
   const xs = (v) => padL + Math.max(0, Math.min(1, v / max)) * (W - padL - padR);
@@ -25,7 +25,7 @@ export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name
   }
   const on = (v) => all || (threshold != null && v >= threshold);
   const circles = placed.map((p) => `<circle class="dot${on(p.v) ? " on" : ""}" data-v="${p.v.toFixed(2)}" cx="${p.x.toFixed(1)}" cy="${(axisY - 4.5 - r - p.lvl * d).toFixed(1)}" r="${r}" style="--i:${p.i}"/>`).join("");
-  const tx = threshold != null ? xs(threshold) : -20;
+  const tx = threshold != null ? xs(threshold) : 0;
   // "Most weeks": a bracket under the axis spanning the middle 80% of outcomes, so the words in the sentence sit on the dots.
   let brk = "";
   if (range) {
@@ -33,10 +33,10 @@ export function dotplot(pr, { max, threshold = null, color = "", id = "dp", name
     const anchor = mid - half < 4 ? "start" : mid + half > W - 4 ? "end" : "middle", tx2 = anchor === "start" ? Math.max(4, x1) : anchor === "end" ? Math.min(W - 4, x2) : mid;
     brk = `<g class="brk"><path d="M${x1.toFixed(1)} ${by - 5} V${by} H${x2.toFixed(1)} V${by - 5}"/><text class="brt" x="${tx2.toFixed(1)}" y="${by + 16}" text-anchor="${anchor}">${text}</text></g>`;
   }
-  return `<svg class="dotplot" id="${id}" ${color ? `style="--c:${color}" ` : ""}viewBox="0 0 ${W} ${H}" role="img" data-max="${max}" data-w="${W}" data-pl="${padL}" data-pr="${padR}" data-cap="${id}-cap" data-name="${esc(name)}"
+  return `<svg class="dotplot" id="${id}" ${color ? `style="--c:${color}" ` : ""}viewBox="0 0 ${W} ${H}" role="img" data-max="${max}" data-w="${W}" data-pl="${padL}" data-pr="${padR}" data-cap="${id}-cap" data-name="${esc(name)}"${group ? ` data-group="${esc(group)}"` : ""}${who ? ` data-who="${esc(who)}"` : ""}
     aria-label="Twenty dots. Each dot is one of twenty equally likely outcomes for ${esc(name)}, from ${f1(vals[0])} to ${f1(vals[19])} points.">
     <line class="axis" x1="${padL}" x2="${W - padR}" y1="${axisY}" y2="${axisY}"/>${ticks}${brk}${circles}
-    <g class="thr" style="transform:translateX(${tx}px)"><line x1="0" x2="0" y1="2" y2="${axisY}"/><path d="M-6 ${axisY + 1} L6 ${axisY + 1} L0 ${axisY - 8} Z"/></g>
+    ${threshold != null ? `<g class="thr" style="transform:translateX(${tx}px)"><line x1="0" x2="0" y1="2" y2="${axisY}"/><path d="M-6 ${axisY + 1} L6 ${axisY + 1} L0 ${axisY - 8} Z"/></g>` : ""}
     <rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent"/></svg>`;
 }
 export const dotCount = (pr, thr) => dotsOf(pr.mean, pr.sd, 20).filter((v) => v >= thr).length;

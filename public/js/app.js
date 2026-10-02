@@ -27,7 +27,8 @@ function applyTheme() {
 applyTheme();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { applyTheme(); render(); });
 // A team logo that does not load just disappears, leaving the letters underneath.
-$app.addEventListener("error", (e) => { const t = e.target; if (t?.tagName === "IMG" && t.closest(".plate")) t.remove(); }, true);
+$app.addEventListener("error", (e) => { const t = e.target; if (t?.tagName === "IMG" && t.closest(".plate, .emblem")) t.remove(); }, true);
+$app.addEventListener("load", (e) => { const t = e.target; if (t?.tagName === "IMG") t.closest(".plate.mono")?.classList.add("ok"); }, true);
 
 // ---------------------------------------------------------------- icons and shell
 const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#2b5837"/><g stroke="#fff" stroke-width="2.6" opacity=".55"><path d="M16 8v48M32 8v48M48 8v48"/></g><ellipse cx="38" cy="30" rx="14" ry="8.6" transform="rotate(-18 38 30)" fill="#8a4620" stroke="#2b1206" stroke-width="1.6"/><path d="M31 32l14-6M34.5 26.5l1.6 5M38 25.3l1.6 5M41.5 24l1.6 5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`;
@@ -127,16 +128,20 @@ document.addEventListener("visibilitychange", autoRefresh);
 window.addEventListener("online", autoRefresh);
 
 // ---------------------------------------------------------------- dotplot interaction
+// Plots in the same group (the two players on Compare) share one threshold line, so dragging either moves both.
+const plotsOf = (svg) => (svg.dataset.group ? [...document.querySelectorAll(`svg.dotplot[data-group="${svg.dataset.group}"]`)] : [svg]);
 function setThreshold(svg, v) {
   const max = +svg.dataset.max, W = +svg.dataset.w, pl_ = +svg.dataset.pl, pr_ = +svg.dataset.pr;
   v = Math.max(1, Math.min(max - 1, Math.round(v)));
   const x = pl_ + (v / max) * (W - pl_ - pr_);
-  svg.querySelector(".thr").style.transform = `translateX(${x}px)`;
-  let n = 0; svg.querySelectorAll(".dot").forEach((d) => { const on = +d.dataset.v >= v; d.classList.toggle("on", on); if (on) n++; });
-  const cap = document.getElementById(svg.dataset.cap);
-  if (cap) cap.innerHTML = capHtml(n, (svg.dataset.name || "he").split(" ")[0], v);
+  for (const s of plotsOf(svg)) {
+    const marker = s.querySelector(".thr"); if (marker) marker.style.transform = `translateX(${x}px)`;
+    let n = 0; s.querySelectorAll(".dot").forEach((d) => { const on = +d.dataset.v >= v; d.classList.toggle("on", on); if (on) n++; });
+    const cap = document.getElementById(s.dataset.cap);
+    if (cap) cap.innerHTML = capHtml(n, s.dataset.who || (s.dataset.name || "he").split(" ")[0], v);
+  }
   const chips = svg.closest("section")?.querySelectorAll(".thresholds button"); chips?.forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.thr === v)));
-  if (svg.id.startsWith("dp-")) S.ui.thr[svg.id.slice(3)] = v;
+  if (svg.dataset.group) S.ui.thr[svg.dataset.group] = v; else if (svg.id.startsWith("dp-")) S.ui.thr[svg.id.slice(3)] = v;
 }
 function dragValue(svg, ev) {
   const r = svg.getBoundingClientRect(), W = +svg.dataset.w, pl_ = +svg.dataset.pl, pr_ = +svg.dataset.pr, max = +svg.dataset.max;
@@ -144,11 +149,11 @@ function dragValue(svg, ev) {
 }
 let dragging = null;
 $app.addEventListener("pointerdown", (e) => {
-  const svg = e.target.closest?.("svg.dotplot"); if (!svg || !svg.dataset.cap || !svg.id.startsWith("dp-")) return;
-  dragging = svg; svg.setPointerCapture?.(e.pointerId); svg.querySelector(".thr").style.transition = "none"; setThreshold(svg, dragValue(svg, e));
+  const svg = e.target.closest?.("svg.dotplot"); if (!svg || !svg.dataset.cap || !(svg.id.startsWith("dp-") || svg.dataset.group)) return;
+  dragging = svg; svg.setPointerCapture?.(e.pointerId); plotsOf(svg).forEach((s) => { const m = s.querySelector(".thr"); if (m) m.style.transition = "none"; }); setThreshold(svg, dragValue(svg, e));
 });
 $app.addEventListener("pointermove", (e) => { if (dragging) setThreshold(dragging, dragValue(dragging, e)); });
-const endDrag = () => { if (dragging) { dragging.querySelector(".thr").style.transition = ""; dragging = null; } };
+const endDrag = () => { if (dragging) { plotsOf(dragging).forEach((s) => { const m = s.querySelector(".thr"); if (m) m.style.transition = ""; }); dragging = null; } };
 $app.addEventListener("pointerup", endDrag); $app.addEventListener("pointercancel", endDrag);
 
 // ---------------------------------------------------------------- clicks
@@ -202,6 +207,7 @@ $app.addEventListener("click", async (e) => {
     case "take": if (L) { (L.taken ||= []).push(id); commit(`${pname(id)} marked as taken`); } break;
     case "wv-mode": S.ui.wvMode = v; render(); break;
     case "wv-pos": S.ui.wvPos = v; render(); break;
+    case "tr-view": S.ui.trView = v === "them" ? "them" : "me"; render(); break;
     case "tr-rm": S.ui[el.dataset.side] = S.ui[el.dataset.side].filter((x) => x !== id); render(); break;
     case "tr-load": S.ui.give = el.dataset.give.split(","); S.ui.get = el.dataset.get.split(","); S.ui.partner = el.dataset.team; render(); window.scrollTo(0, 0); break;
     case "imp-start": S.ui.imp = { step: "find" }; if (S.route.name === "leagues") render(); break;

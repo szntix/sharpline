@@ -2,7 +2,7 @@ import { S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
 import { signals, statusText } from "../engine.js";
-import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe } from "../ui.js";
+import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe, emblem } from "../ui.js";
 import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots } from "../charts.js";
 import { quantile } from "../engine.js";
 import { loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
@@ -42,7 +42,7 @@ export function viewPlayer(id) {
   if (pr?.wx) ctxBits.push(`wind ${pr.wx.wind} mph`);
   const chips = [ours ? `We rank #${ours} ${posLabel(pos)}` : "", exp ? `Experts #${exp} ${posLabel(pos)}` : "", pr?.src && SRC_NOTE[pr.src] ? SRC_NOTE[pr.src] : ""].filter(Boolean);
   const hero = `<a class="link" href="#players" style="display:inline-block;margin:6px 0">Back to players</a>
-    <section class="phead" style="--team:${teamStripe(p.t)}"><div class="top2"><span class="pos ${posClass(pos)}">${posLabel(pos)}</span>${statusChip(pr?.status, pr?.practice)}</div><div class="nm">${esc(p.n)}</div>
+    <section class="phead" style="--team:${teamStripe(p.t)}">${emblem(p.t)}<div class="top2"><span class="pos ${posClass(pos)}">${posLabel(pos)}</span>${statusChip(pr?.status, pr?.practice)}</div><div class="nm">${esc(p.n)}</div>
       <div class="ctx">${ctxBits.map((b) => `<span>${b}</span>`).join("")}</div>${head}
       ${chips.length ? `<div class="chipline">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
       <div class="toolbar"><a class="btn primary" href="#compare/${id}">Compare with…</a>${L && !L.roster.includes(id) ? `<button class="btn" data-act="add-mine" data-id="${id}">Add to my team</button>` : ""}</div></section>`;

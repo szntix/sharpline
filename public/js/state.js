@@ -8,7 +8,7 @@ import { buildProjections, rosValues, replacement } from "./engine.js";
 export const S = {
   user: null, profile: null, players: null, feed: null, usage: null, outlook: null, acc: null, trending: {},
   week: null, activeWeek: null, errors: {}, loading: true, saveState: "saved", route: { name: "week", args: [] },
-  ui: { cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
+  ui: { trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
 };
 export let render = () => {};
 export const setRender = (fn) => { render = fn; };

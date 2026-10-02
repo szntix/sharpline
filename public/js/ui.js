@@ -38,9 +38,17 @@ export const posClass = (p) => POS_CLASS[p] || "neu";
 export const isDark = () => { const t = document.documentElement.dataset.theme; return t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches); };
 export const teamStripe = (abbr) => teamColors(abbr, isDark()).stripe;
 // The team plate: letters on the team color, with the logo laid over them when it loads.
-export function plate(abbr) {
-  const c = teamColors(abbr, isDark()), url = logoUrl(abbr);
-  return `<span class="plate" style="--pl:${c.plate};--pli:${c.plateInk}" aria-hidden="true">${esc(abbr || "FA")}${url ? `<img src="${url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ""}</span>`;
+// mono: the logo as a one-color silhouette (white, or black on a light team color) directly on the team color, with no pale disc behind it.
+export function plate(abbr, { mono = false } = {}) {
+  const c = teamColors(abbr, isDark()), url = logoUrl(abbr), ink = c.plateInk === "#111111";
+  return `<span class="plate${mono ? " mono" : ""}${mono && ink ? " ink" : ""}" style="--pl:${c.plate};--pli:${c.plateInk}" aria-hidden="true">${esc(abbr || "FA")}${url ? `<img src="${url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ""}</span>`;
+}
+// A team logo as a soft silhouette for the corner of a panel. It is a filter on the same logo image, so it works for every team and
+// both themes, and if the image does not load nothing is left behind. A light team color gets a dark silhouette.
+export function emblem(abbr) {
+  const url = logoUrl(abbr); if (!url) return "";
+  const lite = teamColors(abbr, false).plateInk === "#111111";     // dark text on a light panel: a light silhouette; white text on a dark panel: a dark one
+  return `<img class="emblem${lite ? " lite" : ""}" src="${url}" alt="" aria-hidden="true" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
 }
 
 // A small ring that shows how likely a player is to play: full is healthy, empty is out.

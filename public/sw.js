@@ -1,5 +1,5 @@
 // App shell is cached for offline launch. Data calls always try the network first and fall back to the last good copy.
-const SHELL = "sharpline-shell-v3-6", DATA = "sharpline-data-v3-6";
+const SHELL = "sharpline-shell-v3-7", DATA = "sharpline-data-v3-7";
 const FILES = [
  "/",
  "/fonts/archivo-latin-wdth-normal.woff2",

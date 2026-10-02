@@ -1,10 +1,52 @@
 import { S, computed, league, pl, pname, leagueOrDefault } from "../state.js";
-import { waivers, tradeValue, evaluateTrade, tradeIdeas } from "../engine.js";
+import { waivers, tradeValue, evaluateTrade, tradeIdeas, optimal } from "../engine.js";
 import { xppr } from "../model.js";
-import { SLOT_ELIG, positionsFor, inPosition } from "../scoring.js";
-import { esc, f1, f0, sgn, posLabel, posClass, plate } from "../ui.js";
+import { SLOT_ELIG, SLOT_LABEL, positionsFor, inPosition } from "../scoring.js";
+import { esc, f1, f0, sgn, posLabel, posClass, plate, teamStripe } from "../ui.js";
 import { luck } from "../charts.js";
 import { loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
+
+// A player's position as a colored chip, so a name is never just text.
+const posTag = (id) => { const p = S.players[id]; return p ? `<span class="pos ${posClass(p.p)}">${esc(posLabel(p.p))}</span>` : ""; };
+
+// What a team looks like after a trade: the same lineup optimizer that scores the trade, applied to the roster before and after.
+// Values are each player's average points per game for the rest of the season, the same measure behind the verdict.
+function tradePreview(L, C, give, get, partner) {
+  const R = C.R, val = (id) => R[id]?.per || 0, posOf = (id) => S.players[id]?.p;
+  const view = S.ui.trView === "them" && partner ? "them" : "me";
+  const known = (ids) => ids.filter((id) => S.players[id]);      // an id the player table does not know cannot be drawn, so it is left out of the counts too
+  const base = known(view === "me" ? L.roster : partner.roster), out = known(view === "me" ? give : get), inn = known(view === "me" ? get : give);
+  const after = [...base.filter((id) => !out.includes(id)), ...inn.filter((id) => !base.includes(id))];
+  const B = optimal(base, L.slots, val, posOf), A = optimal(after, L.slots, val, posOf);
+  const wasStart = new Set(B.starters.map((s) => s.id).filter(Boolean)), slotOf = (id) => B.starters.find((s) => s.id === id)?.slot;
+  const tag = (kind, text) => `<span class="tag ${kind}"><i></i>${esc(text)}</span>`, last = (id) => pname(id).split(" ").slice(-1)[0];
+  const row = (id, { lead, slot = null, tags = "", note = "", dim = false }) => { const p = S.players[id]; if (!p) return "";
+    return `<div class="row slotted pv${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}"><span class="pos ${slot ? posClass(slot) : "neu"}">${esc(lead)}</span>
+      <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && slot === p.p ? "" : posTag(id)}</span><span class="sub"><span class="meta">${esc(note || p.t || "FA")}</span>${tags ? `<span class="tags">${tags}</span>` : ""}</span></div>
+      <div class="proj"><span class="num">${val(id) > 0 ? f1(val(id)) : "–"}</span><small>per game</small></div></div>`; };
+  const starters = A.starters.map((s, i) => {
+    const lead = SLOT_LABEL[s.slot] || s.slot;
+    if (!s.id) return `<div class="row slotted pv"><span class="pos neu">${esc(lead)}</span><div class="who"><span class="name muted">Empty slot</span></div></div>`;
+    const was = B.starters[i]?.id; let tags = "", note = "";
+    if (inn.includes(s.id)) { tags = tag("up", "New"); if (was && was !== s.id) note = out.includes(was) ? `Replaces ${last(was)}` : `Takes ${last(was)}'s spot`; }
+    else if (!wasStart.has(s.id)) { tags = tag("up", "Moves up"); note = "From the bench"; }
+    return row(s.id, { lead, slot: s.slot, tags, note });
+  }).join("");
+  const bench = [...A.bench].sort((a, b) => val(b) - val(a)).map((id) => {
+    if (inn.includes(id)) {
+      const ahead = A.starters.filter((s) => s.id && SLOT_ELIG[s.slot]?.includes(posOf(id))).sort((a, b) => a.v - b.v)[0];
+      return row(id, { lead: "BN", tags: tag("up", "New"), note: ahead ? `Behind ${last(ahead.id)} by ${f1(ahead.v - val(id))}` : "No open spot" });
+    }
+    return row(id, { lead: "BN", tags: wasStart.has(id) ? tag("warn", "Moves to bench") : "" });
+  }).join("");
+  const leaving = out.map((id) => row(id, { lead: slotOf(id) ? SLOT_LABEL[slotOf(id)] || slotOf(id) : "BN", slot: slotOf(id) || null, tags: tag("down", "Leaving"), note: slotOf(id) ? "Was starting" : "Was on the bench", dim: true })).join("");
+  const who = view === "me" ? "Your" : `${partner.name}'s`, diff = A.total - B.total;
+  const toggle = partner ? `<div class="seg" role="group" aria-label="Whose roster" style="margin-bottom:12px">${[["me", "Your team"], ["them", partner.name]].map(([k, l]) => `<button data-act="tr-view" data-v="${k}" aria-pressed="${view === k}">${esc(l)}</button>`).join("")}</div>` : "";
+  return sec(`${who} roster after the trade`, `${toggle}<div class="list"><div class="band"><span>Starters</span><span>${f1(B.total)} to ${f1(A.total)} (${sgn(diff)}) a game</span></div>${starters}
+    <div class="band"><span>Bench</span><span>${A.bench.length} ${A.bench.length === 1 ? "player" : "players"}</span></div>${bench || `<p class="muted small" style="padding:12px 16px">No one on the bench.</p>`}
+    <div class="band"><span>Leaving</span><span>${out.length}</span></div>${leaving}</div>
+    <p class="small muted" style="margin-top:10px">Average points a game for the rest of the season, the same measure behind the verdict above. Lineup slots are filled the best way available.</p>`);
+}
 
 function unavailableSet(L) { const s = new Set([...L.roster, ...(L.taken || [])]); for (const o of L.others) for (const id of o.roster) s.add(id); return s; }
 
@@ -49,15 +91,16 @@ function viewTrades(L) {
       <p class="small muted" style="margin-top:10px">Value is points above a replacement-level player in your league over the remaining ${ev.weeks} weeks${L.playoffWeight ? ", with playoff weeks counting 1.5×" : ""}${L.type === "dynasty" ? ", plus 3 future seasons adjusted for age" : L.type === "keeper" ? ", plus part of next season" : ""}.</p>
       ${ev.theirLineupGain != null && ev.theirLineupGain > 0 && lg > 0 ? `<div class="callout" style="margin-top:10px">Both lineups improve, so this one has a real chance of being accepted.</div>` : ""}</div>`;
   }
-  const chips = (ids, side) => ids.map((id) => `<span class="chip">${esc(pname(id))} <span class="muted small">${f0(tv(id))}</span><button aria-label="Remove ${esc(pname(id))}" data-act="tr-rm" data-side="${side}" data-id="${id}">×</button></span>`).join("");
-  const myOpts = L.roster.filter((id) => !give.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(pname(id))} (${f0(tv(id))})</option>`).join("");
-  const theirOpts = partner ? partner.roster.filter((id) => !get.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(pname(id))} (${f0(tv(id))})</option>`).join("") : "";
+  const chips = (ids, side) => ids.map((id) => `<span class="chip">${posTag(id)}${esc(pname(id))} <span class="muted small">${f0(tv(id))}</span><button aria-label="Remove ${esc(pname(id))}" data-act="tr-rm" data-side="${side}" data-id="${id}">×</button></span>`).join("");
+  const myOpts = L.roster.filter((id) => !give.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))} (${f0(tv(id))})</option>`).join("");
+  const theirOpts = partner ? partner.roster.filter((id) => !get.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))} (${f0(tv(id))})</option>`).join("") : "";
   const ideas = L.others.length ? (C.cache.ideas || (C.cache.ideas = tradeIdeas(c, L, R, repl, L.roster, L.others))) : [];
+  const preview = give.length && get.length ? tradePreview(L, C, give, get, partner) : "";
   return `${syncLine(L)}<label class="field" style="max-width:340px">Trading with<select data-bind="partner"><option value="">Anyone (search all players)</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === S.ui.partner ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
     <div class="trade-cols"><div class="panel"><h3 class="h2">You give</h3><div class="chips" style="margin:10px 0">${chips(give, "give")}</div><select data-bind="tr-give" aria-label="Add a player you give"><option value="">Add from your roster…</option>${myOpts}</select></div>
-      <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}
-    ${L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => `<div class="row"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
-      <div class="who"><span class="name"><span class="nm"><b class="lbl">Give</b>${esc(t.give.map(pname).join(", "))}</span></span><span class="name"><span class="nm"><b class="lbl">Get</b>${esc(t.get.map(pname).join(", "))}</span></span><span class="sub"><span class="meta">With ${esc(t.team)}</span></span></div>
+      <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}${preview}
+    ${L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => `<div class="row trade"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
+      <div class="who"><span class="name"><b class="lbl">Give</b>${t.give.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="name"><b class="lbl">Get</b>${t.get.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="sub"><span class="meta">With ${esc(t.team)}</span></span></div>
       <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button><span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span></div></div>`).join("")}</div>` : `<div class="panel muted">No one-for-one deal found that improves both lineups at similar value. Try building an offer above.</div>`) : ""}`;
 }
 
