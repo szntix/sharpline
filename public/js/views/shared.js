@@ -3,7 +3,7 @@ import { signals } from "../engine.js";
 import { esc, f1, ago, agoShort, kickoffText, posLabel, statusChip, posClass, plate, teamStripe } from "../ui.js";
 import { SLOT_LABEL } from "../scoring.js";
 
-export const SRC_NOTE = { blend: "", experts: "experts only", sleeper: "Sleeper only", model: "our model only", lines: "estimate", none: "no line", bye: "bye" };
+export const SRC_NOTE = { blend: "", experts: "experts only", sleeper: "Sleeper only", model: "model only", lines: "estimate", none: "no line", bye: "bye" };
 
 // How fresh is everything on screen. One line when all is well; the detail is a tap away.
 export function pulse(feed) {
@@ -33,25 +33,29 @@ export function feedError() {
 // One player row, always two lines so every row is the same size: the name, position and status on top, and below it
 // the game on the left with at most two short condition tags on the right. The full sentence for each tag is on the
 // player page and is read out to screen readers. The team shows as a stripe on the left edge.
-export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, extra = "", showExp = false } = {}) {
+export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, gain = "", showExp = false, value = "blend" } = {}) {
   const p = pl(id), pr = C.P.proj[id]; if (!p) return "";
   const pos = p.p, g = pr?.game;
   const where = pos === "DEF" || !p.t ? "" : pr?.bye ? "Bye week" : pr?.opp ? `${g.home === p.t ? "vs" : "at"} ${pr.opp} · ${kickoffText(g)}` : "";
   const exp = showExp && C.ranks.exp[id] ? ` · experts ${posLabel(pos)}${C.ranks.exp[id]}` : "";
   const note = SRC_NOTE[pr?.src] || "";
   const chip = statusChip(pr?.status, pr?.practice);
-  const gain = String(extra || "").replace(/^[,\s]+/, "");
   const tags = gain ? [] : (sig ? signals(id, C.c, C.P).filter((x) => x.k).slice(0, 2) : []);
-  const tagHtml = gain ? `<span class="tag ${/^\+/.test(gain) ? "up" : "flat"}"><i></i>${esc(gain)}</span>`
-    : tags.map((x, n) => `<span class="tag ${x.t}${n ? " t2" : ""}" title="${esc(x.s)}"><i></i>${esc(x.k)}<span class="sr">: ${esc(x.s)}</span></span>`).join("");
+  const gainHtml = gain ? `<span class="tag ${/^\+/.test(gain) ? "up" : "flat"}"><i></i>${esc(gain)}</span>` : "";
+  const tagHtml = tags.map((x, n) => `<span class="tag ${x.t}${n ? " t2" : ""}" title="${esc(x.s)}"><i></i>${esc(x.k)}<span class="sr">: ${esc(x.s)}</span></span>`).join("");
+  // value "model" shows our stat model on its own, in this league's scoring; players it does not cover show a dash.
+  const modelPts = pr?.model != null && pr.ppr > 0 ? pr.model * (pr.mean / pr.ppr) : null;
+  const shownNum = value === "model"
+    ? `<span class="num">${modelPts != null ? f1(modelPts) : "–"}</span><small>${modelPts != null ? "our model" : "no model"}</small>`
+    : `<span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${note ? esc(note) : "&nbsp;"}</small>`;
   const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
     : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
   return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
     ${lead}
     <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
       <span class="sub"><span class="meta">${esc(where || p.t || "FA")}${exp}</span>${tagHtml ? `<span class="tags">${tagHtml}</span>` : ""}</span></div>
-    <div class="proj"><span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${note ? esc(note) : "&nbsp;"}</small></div>
-    ${act ? `<div class="act">${act}</div>` : ""}</div>`;
+    <div class="proj">${shownNum}</div>
+    ${act || gainHtml ? `<div class="act">${act}${gainHtml}</div>` : ""}</div>`;
 }
 export const ribbonMax = (prs) => Math.max(30, Math.ceil(Math.max(...prs.map((p) => (p ? p.mean + 1.7 * p.sd : 0)), 0) / 10) * 10);
 

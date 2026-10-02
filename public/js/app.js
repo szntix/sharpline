@@ -72,22 +72,35 @@ function render() {
 window.addEventListener("hashchange", () => { S._keepScroll = false; render(); window.scrollTo(0, 0); });
 
 // ---------------------------------------------------------------- auth and boot
-function renderAuth(msg = "") {
+// Sign in and Create account. The form keeps what was typed after a mistake, shows the invite code box all the time (a new
+// account may need it), says what is happening while the server works, and does not depend on the browser reporting which
+// button was tapped, because older phones do not.
+function renderAuth(msg = "", keep = {}) {
   S.user = null;
+  const v = (x) => esc(x || "");
   $app.innerHTML = `<div class="auth"><div class="brand">${LOGO}<span>Sharpline</span></div>
     <p class="lede">Start/sit, waiver and trade help built on live betting lines and a tested model. Each account keeps its own leagues.</p>
-    <form id="authform" novalidate>${msg ? `<div class="banner err" role="alert">${esc(msg)}</div>` : ""}
-      <label class="field">Username<input type="text" name="username" autocomplete="username" autocapitalize="none" required minlength="3"></label>
-      <label class="field">PIN<input type="password" name="pin" autocomplete="current-password" inputmode="numeric" required minlength="4"></label>
-      <details><summary class="small">Creating an account? Invite code</summary><label class="field" style="margin-top:8px">Invite code (only if this site requires one)<input type="text" name="invite" autocomplete="off"></label></details>
+    <form id="authform" novalidate>${msg ? `<div class="banner err" role="alert" id="autherr">${esc(msg)}</div>` : ""}
+      <label class="field">Username<input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" required minlength="3" value="${v(keep.username)}"></label>
+      <label class="field">PIN<input type="password" name="pin" autocomplete="current-password" inputmode="numeric" required minlength="4" value="${v(keep.pin)}"></label>
+      <label class="field">Invite code <span class="muted">(only needed to create an account)</span><input type="text" name="invite" autocomplete="off" autocapitalize="none" autocorrect="off" value="${v(keep.invite)}"></label>
       <div class="toolbar"><button class="btn primary" name="action" value="login" type="submit">Sign in</button><button class="btn" name="action" value="register" type="submit">Create account</button></div></form></div>`;
   const form = document.getElementById("authform");
+  let tapped = "";
+  form.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", () => { tapped = btn.value; }));      // runs before the form is submitted, on every browser
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const fd = new FormData(form), action = e.submitter?.value || "login";
-    form.querySelectorAll("button").forEach((b) => (b.disabled = true));
-    try { const r = await api("auth", { method: "POST", auth: false, body: { action, username: fd.get("username"), pin: fd.get("pin"), invite: fd.get("invite") } }); session.set(r); boot(); }
-    catch (err) { renderAuth(err.message); }
+    const fd = new FormData(form), action = e.submitter?.value || tapped || "login", mine = { username: fd.get("username"), pin: fd.get("pin"), invite: fd.get("invite") };
+    const buttons = [...form.querySelectorAll("button")], pressed = buttons.find((b) => b.value === action);
+    buttons.forEach((b) => (b.disabled = true)); if (pressed) pressed.textContent = action === "register" ? "Creating account…" : "Signing in…";
+    const slow = new Promise((_, no) => setTimeout(() => no(new Error("The server is taking too long to answer. Wait a moment and try again.")), 25000));
+    try { const r = await Promise.race([api("auth", { method: "POST", auth: false, body: { action, ...mine } }), slow]); session.set(r); boot(); }
+    catch (err) {
+      const wrongPin = action === "login" && /PIN|locked/i.test(err.message);
+      renderAuth(err.message, { username: mine.username, invite: mine.invite, pin: wrongPin ? "" : mine.pin });
+      const f = document.querySelector(/invite/i.test(err.message) ? '[name="invite"]' : wrongPin ? '[name="pin"]' : '[name="username"]'); f?.focus();
+      document.getElementById("autherr")?.scrollIntoView({ block: "nearest" });
+    }
   });
 }
 async function boot() {
@@ -206,7 +219,7 @@ $app.addEventListener("click", async (e) => {
 // ---------------------------------------------------------------- form changes and search
 $app.addEventListener("change", (e) => {
   const el = e.target, b = el.dataset.bind;
-  if (el.dataset.change === "pl-sort") { if (["proj", "experts", "gap"].includes(el.value)) S.ui.plSort = el.value; render(); return; }
+  if (el.dataset.change === "pl-sort") { if (["proj", "model", "experts", "gap"].includes(el.value)) S.ui.plSort = el.value; render(); return; }
   if (el.dataset.change === "pl-filter") { if (["all", "free", "mine"].includes(el.value)) S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
   if (!b) return;
   const L = league(), E = editingLeague();

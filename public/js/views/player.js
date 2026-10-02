@@ -56,6 +56,14 @@ export function viewPlayer(id) {
     <p class="small muted" style="margin-top:10px">Each dot is one of 20 equally likely outcomes. Drag the line to ask a different question. Ranges were checked against five seasons of results: the real score landed inside the 10th-to-90th range about 80% of the time.</p>`);
 
   // 2. How we got the number
+  function modelWhy(pid, pp, q) {
+    if (q.src === "lines") return "Kickers and defenses have no player-level model. This is an estimate from the game's betting line, and it has not been tested the way player projections have.";
+    const base = q.kind === "experts" ? "the experts' consensus" : q.kind === "sleeper" ? "Sleeper's number" : "our best available number", u = S.usage?.players?.[pid];
+    if (!S.usage) return `Game logs are still loading, so for now this is ${base}.`;
+    if (!u) return `Our stat model has nothing to work from because ${esc(pp.n)} could not be matched to his game logs, so this is ${base}.`;
+    if (u.n < 3) return `Only ${u.n} game${u.n === 1 ? "" : "s"} logged for him, and our stat model needs 3, so this is ${base}.`;
+    return `Our stat model has no number for him this week, so this is ${base}.`;
+  }
   let built = "";
   if (pr.parts && M) {
     const rows = [{ kind: "start", label: "Players who score like him usually get", note: "his recent games, pulled toward normal", v: pr.base }];
@@ -75,7 +83,7 @@ export function viewPlayer(id) {
         <div class="b3"><span><b style="text-align:left">Blend</b></span><div class="t"><i class="bl" style="width:${(pr.ppr / Math.max(pr.model, pr.experts || 0, pr.sleeper || 0, pr.ppr, 1)) * 100}%"></i></div><b>${f1(pr.ppr)}</b></div></div>
         <p class="small muted" style="margin-top:10px">${pr.kind === "blend" ? `Blend is ${Math.round(w.experts * 100)}% expert consensus and ${Math.round(w.model * 100)}% our stat model. Those weights came from testing ${posLabel(pos)}s over five seasons: experts were more accurate than any stats-only model, and adding the model to them helped a little more.` : `Only ${SRC_NOTE[pr.kind] || pr.kind} was available for this player.`} Numbers are standard PPR.</p>` : ""}`);
   } else {
-    built = sec("Where the number comes from", `<p>${pr.src === "lines" ? "Kickers and defenses have no player-level model. This is an estimate from the game's betting line, and it has not been tested the way player projections have." : `Not enough game history for our stat model, so this is ${SRC_NOTE[pr.kind] || "the consensus"}.`}</p>`);
+    built = sec("Where the number comes from", `<p>${modelWhy(id, p, pr)}</p>`);
   }
 
   // 3. Where he stands

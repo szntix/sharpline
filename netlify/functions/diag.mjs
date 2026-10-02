@@ -1,6 +1,7 @@
 import { json, fail } from "./lib/util.mjs";
 import { buildFeed } from "./feed.mjs";
 import { loadPlayers } from "./players.mjs";
+import { computeUsage } from "./lib/history.mjs";
 import { gameMap, teamContext, defenseStats, kickerStats, availability, availMult } from "../../public/js/model.js";
 import { points, SCORING_PRESETS } from "../../public/js/scoring.js";
 
@@ -35,6 +36,10 @@ export default async () => {
     }
 
     const verdict = [];
+  try {
+    const u = await computeUsage(), c = u.coverage;
+    if (c) verdict.push(`Stat model: ${c.linked} of ${c.active} players with a game this season are linked to their game logs${c.byName ? ` (${c.byName} by name)` : ""}${c.missing.length ? `. Not linked: ${c.missing.slice(0, 6).map((m) => `${m.n} (${m.p})`).join(", ")}` : ""}.`);
+  } catch (e) { verdict.push(`Stat model: game logs unavailable (${e.message}).`); }
     for (const pos of ["K", "DEF"]) {
       const r = out[pos];
       if (!r.inPlayerList) verdict.push(`Sleeper's player list has no ${label[pos]}, so that tab has nothing to show.`);

@@ -13,12 +13,30 @@ const numOrNull = (v) => { const x = Number(na(v)); return na(v) == null || !isF
 // ---------------------------------------------------------------------------------------------
 // Expert consensus: FantasyPros weekly rankings, republished daily by the dynastyprocess project.
 // ---------------------------------------------------------------------------------------------
-export async function fpIds() {
-  return cached("fp-ids-v1", 3 * 864e5, async () => {
+// The ID table links the same player across sites. One download feeds two lookups: FantasyPros id to Sleeper id (for expert
+// rankings) and nflverse (gsis) id to Sleeper id (for game logs and injury reports).
+export async function idTable() {
+  return cached("id-table-v2", 3 * 864e5, async () => {
     const rows = parseCsv(await getText(`${RAW}/db_playerids.csv`, { timeout: 30000 }));
-    const m = {}; for (const r of rows) if (r.fantasypros_id && r.sleeper_id && r.sleeper_id !== "NA") m[r.fantasypros_id] = r.sleeper_id;
-    return m;
+    const fp = {}, gsis = {};
+    for (const r of rows) {
+      const s = na(r.sleeper_id); if (!s) continue;
+      if (na(r.fantasypros_id)) fp[r.fantasypros_id] = s;
+      if (na(r.gsis_id)) gsis[r.gsis_id] = s;
+    }
+    return { fp, gsis };
   });
+}
+export async function fpIds() { return (await idTable()).fp; }
+
+// nflverse id to Sleeper id. Sleeper's own player table carries a gsis id for only some players (its documentation does not list
+// the field at all), and a player without one used to get no stat-model number and no injury status. The ID table fills the gaps;
+// Sleeper's own value wins if the two ever disagree.
+export async function gsisToSleeper(players) {
+  const out = {};
+  try { const { gsis } = await idTable(); for (const [g, s] of Object.entries(gsis)) if (players[s]) out[g] = s; } catch {}
+  for (const [id, p] of Object.entries(players)) if (p.g) out[p.g] = id;
+  return out;
 }
 
 async function rawEcr() {
@@ -95,10 +113,9 @@ export async function sleeperProj(season, week) {
 // Official injury reports (nflverse republishes them through the week)
 // ---------------------------------------------------------------------------------------------
 export async function loadInjuries(season, week) {
-  const all = await cached(`inj3-${season}`, 30 * 60e3, async () => {
+  const all = await cached(`inj4-${season}`, 30 * 60e3, async () => {
     const csv = await getText(`${NFLV}/injuries/injuries_${season}.csv`);
-    const players = await loadPlayers(); const g2s = {};
-    for (const [id, p] of Object.entries(players)) if (p.g) g2s[p.g] = id;
+    const players = await loadPlayers(); const g2s = await gsisToSleeper(players);
     const byWeek = {}, rows = parseCsv(csv), shape = checkInjuries(Object.keys(rows[0] || {}));
     for (const r of rows) {
       const sid = g2s[r.gsis_id]; if (!sid || !["QB", "RB", "WR", "TE", "K"].includes(r.position)) continue;

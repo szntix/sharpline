@@ -67,6 +67,8 @@ A quiet neutral frame with turf green as the brand, and color only where it carr
 - **Team color on rows:** off by default (plain slate rows with a team stripe). Leagues, Account and data, has a switch at the bottom to tint each row and the player card with the team's color; the choice is remembered on the device.
 - **Dropdowns:** Sort and Show act only when an option is chosen (`data-change`), never on the tap that opens them, so opening and dismissing a dropdown changes nothing.
 - **Version:** the build number shows in Leagues, Account and data, on any error screen, and at `/version.json`, so it is always clear which build is live.
+- **Players sort:** Blended (the projection we show), Our model (the stat model alone, with its own number on each row; players it does not cover come last), Expert rank, and We like more. A one-line note under the bar says what the order means, using the real weights for the position you are on.
+- **Moves:** one 12 px rhythm down the page. Every list row has a fixed number column, so numbers, gain tags and buttons line up from row to row. Waiver rows show the gain in the action row, trade ideas show Give and Get on separate lines, and Hot and cold rows use the same plate, name and number as everywhere else.
 - **Sub-menus:** every segmented bar is full width, so stacked bars share the same edges at any screen size, and a segment can never be narrower than its own label (the selected pill always encloses its text). Screens down to 320 px wide fit without sideways scrolling.
 - **Range:** the likely range is not shown on list rows (how wide it is follows almost entirely from the projection). On the player page it is a "most weeks" bracket drawn under the dotplot's axis, spanning the middle 80% of the dots, so the words sit on the data. The hero is just the projected number.
 - **Slate:** a ranked game list first, with the scatter map one tap away.
@@ -104,8 +106,18 @@ Who is on each team decides who shows as a free agent, so it has to be current. 
 - If Sleeper cannot be reached, or answers with nothing usable, the saved rosters are kept and the screen says how old they are. A sync never wipes a roster.
 - Limit: Sleeper's rosters call shows who is on a team, not who is still locked on waivers after being dropped, so a player dropped yesterday can show as available until waivers clear.
 
+## Matching players to their game logs
+
+The stat model needs a player's game logs, which come from nflverse and are keyed by nflverse's own player id (the `gsis` id). Sleeper's player table is where the app learns who is who, but Sleeper does not document a `gsis` id field, and a player without one used to get no stat-model number and no injury status (the final number then fell back to the experts alone and the row said "experts only").
+
+- The link now combines Sleeper's own id (which wins if it disagrees), the id table the app already downloads for expert rankings (it links 97 to 99 percent of this season's players, one to one), and, for anyone neither covers, a match on the same name and position when exactly one Sleeper player fits. If two players share a name and position nobody is guessed.
+- Injury reports use the same link.
+- Coverage is visible. `/api/diag` has a "Stat model" line (how many of this season's players are linked, and who is not). The Proof screen shows the same count. A player's own page says why the model has no number: not matched to game logs, fewer than 3 games logged, or game logs not loaded.
+- The blend itself is mostly experts by design, because testing over five seasons found experts more accurate than a stats-only model: our model carries 28 percent for QBs, 29 for RBs, 17 for WRs and 36 for TEs. So the Blended order tracks expert rank closely. Use the "Our model" sort for the stat model's own ranking and "We like more" for where it disagrees with the experts.
+
 ## Privacy and accounts
 
+- **Signing in and creating an account:** the invite code box is always visible (it is only checked when creating an account), what you typed is kept after a mistake (a wrong PIN clears just the PIN), the cursor lands in the field that needs fixing, the button says "Creating account…" or "Signing in…" while the server works, and the form does not depend on the browser reporting which button was tapped, which older phones do not. A request that takes over 25 seconds stops with a message.
 - Each person's leagues, rosters and settings are stored under their own username. `/api/profile` returns only the signed-in user's own profile, answers nothing without a valid session token, and is never cached on the network or the device.
 - Sleeper data is public on Sleeper itself: anyone who knows a league ID or Sleeper username can read its rosters there. The app adds no extra exposure, and its Sleeper lookup (`/api/sleeper`) now requires a signed-in user.
 - PINs are salted and hashed (PBKDF2). Five wrong PINs lock that username for 15 minutes. Use a PIN of 6 or more digits.

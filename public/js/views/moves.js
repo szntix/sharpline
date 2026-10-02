@@ -2,7 +2,7 @@ import { S, computed, league, pl, pname, leagueOrDefault } from "../state.js";
 import { waivers, tradeValue, evaluateTrade, tradeIdeas } from "../engine.js";
 import { xppr } from "../model.js";
 import { SLOT_ELIG, positionsFor, inPosition } from "../scoring.js";
-import { esc, f1, f0, sgn, posLabel, posClass } from "../ui.js";
+import { esc, f1, f0, sgn, posLabel, posClass, plate } from "../ui.js";
 import { luck } from "../charts.js";
 import { loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
 
@@ -11,9 +11,9 @@ function unavailableSet(L) { const s = new Set([...L.roster, ...(L.taken || [])]
 export function viewMoves() {
   if (!S.players || !S.feed) return feedError() + loading();
   const tab = S.ui.moves, L = league();
-  const seg = `<div class="seg" role="group" aria-label="Section" style="margin:10px 0 14px">${[["waivers", "Waivers"], ["trades", "Trades"], ["regress", "Hot and cold"]].map(([k, l]) => `<button data-act="moves-tab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
+  const seg = `<div class="seg" role="group" aria-label="Section">${[["waivers", "Waivers"], ["trades", "Trades"], ["regress", "Hot and cold"]].map(([k, l]) => `<button data-act="moves-tab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
   const body = tab === "regress" ? viewRegress() : !L ? emptyLeague() : tab === "trades" ? viewTrades(L) : viewWaivers(L);
-  return `${feedError()}<h1 class="h1" style="margin-top:8px">Moves</h1>${seg}${L && tab !== "regress" ? syncLine(L) : ""}${body}`;
+  return `${feedError()}<div class="stack"><h1 class="h1" style="margin-top:8px">Moves</h1>${seg}${body}</div>`;
 }
 
 function viewWaivers(L) {
@@ -23,12 +23,13 @@ function viewWaivers(L) {
   const mode = S.ui.wvMode, pos = S.ui.wvPos, manual = !L.sleeper;
   const positions = positionsFor(L.slots);
   const rows = W.rows.filter((r) => inPosition(pl(r.id)?.p, pos)).sort((a, b) => (mode === "week" ? b.weekGain - a.weekGain || b.proj - a.proj : b.rosGain - a.rosGain || b.per - a.per)).slice(0, 40);
-  return `<p class="lede">Ranked by how much each free agent would add to your starting lineup. ${manual ? "Mark players other teams already have so they drop off this list." : "Rostered players are removed using your Sleeper league."}</p>
-    <div class="stack" style="margin-top:12px"><div class="toolbar"><div class="seg" role="group" aria-label="Horizon">${[["ros", "Rest of season"], ["week", "This week"]].map(([k, l]) => `<button data-act="wv-mode" data-v="${k}" aria-pressed="${mode === k}">${l}</button>`).join("")}</div>
-      <div class="seg" role="group" aria-label="Position">${positions.map((p) => `<button data-act="wv-pos" data-v="${p}" class="${{ QB: "qb", RB: "rb", WR: "wr", TE: "te", FLEX: "flex", K: "k", DEF: "dst" }[p] || ""}" aria-pressed="${pos === p}">${p === "ALL" ? "All" : p === "FLEX" ? "Flex" : posLabel(p)}</button>`).join("")}</div></div>
-      ${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}</div>
-    <div class="list" style="margin-top:8px">${rows.map((r) => prow(r.id, C, { sig: true, extra: `, ${mode === "week" ? (r.weekGain > 0.05 ? sgn(r.weekGain) + " to your lineup" : "no lineup gain") : (r.rosGain > 0.5 ? sgn(r.rosGain, 0) + " season pts" : "no lineup gain")}`,
-      act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 0">No free agents at this position improve your lineup.</p>`}</div>`;
+  const lede = `<div><p class="lede">Ranked by how much each free agent would add to your starting lineup. ${manual ? "Mark players other teams already have so they drop off this list." : "Rostered players are removed using your Sleeper league."}</p>${syncLine(L, "margin-top:6px")}</div>`;
+  const segBar = (label, opts, cur, act, cls = () => "") => `<div class="seg" role="group" aria-label="${label}">${opts.map(([k, l]) => `<button data-act="${act}" data-v="${k}" class="${cls(k)}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
+  const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", FLEX: "flex", K: "k", DEF: "dst" };
+  // the gain is a short number in the action row; the horizon bar above says whether it is the rest of the season or this week
+  const gainOf = (r) => mode === "week" ? (r.weekGain > 0.05 ? `${sgn(r.weekGain)} pts` : "no gain") : (r.rosGain > 0.5 ? `${sgn(r.rosGain, 0)} pts` : "no gain");
+  return `${lede}${segBar("Horizon", [["ros", "Rest of season"], ["week", "This week"]], mode, "wv-mode")}${segBar("Position", positions.map((p) => [p, p === "ALL" ? "All" : p === "FLEX" ? "Flex" : posLabel(p)]), pos, "wv-pos", (k) => POSCLS[k] || "")}${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}
+    <div class="list">${rows.map((r) => prow(r.id, C, { gain: gainOf(r), act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 16px">No free agents at this position improve your lineup.</p>`}</div>`;
 }
 
 function viewTrades(L) {
@@ -52,11 +53,12 @@ function viewTrades(L) {
   const myOpts = L.roster.filter((id) => !give.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(pname(id))} (${f0(tv(id))})</option>`).join("");
   const theirOpts = partner ? partner.roster.filter((id) => !get.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(pname(id))} (${f0(tv(id))})</option>`).join("") : "";
   const ideas = L.others.length ? (C.cache.ideas || (C.cache.ideas = tradeIdeas(c, L, R, repl, L.roster, L.others))) : [];
-  return `<div class="stack"><label class="field" style="max-width:340px">Trading with<select data-bind="partner"><option value="">Anyone (search all players)</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === S.ui.partner ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
+  return `${syncLine(L)}<label class="field" style="max-width:340px">Trading with<select data-bind="partner"><option value="">Anyone (search all players)</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === S.ui.partner ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
     <div class="trade-cols"><div class="panel"><h3 class="h2">You give</h3><div class="chips" style="margin:10px 0">${chips(give, "give")}</div><select data-bind="tr-give" aria-label="Add a player you give"><option value="">Add from your roster…</option>${myOpts}</select></div>
-      <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}</div>
-    ${L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => `<div class="row slotted"><span class="pos neu">↔</span><div class="who"><span class="name">Give ${esc(t.give.map(pname).join(", "))}, get ${esc(t.get.map(pname).join(", "))}</span><span class="meta">With ${esc(t.team)}. Your lineup ${sgn(t.lineupGain, 0)}, theirs ${sgn(t.theirLineupGain, 0)} over the season.</span></div>
-      <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button></div></div>`).join("")}</div>` : `<div class="panel muted">No one-for-one deal found that improves both lineups at similar value. Try building an offer above.</div>`) : ""}`;
+      <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}
+    ${L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => `<div class="row"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
+      <div class="who"><span class="name"><span class="nm"><b class="lbl">Give</b>${esc(t.give.map(pname).join(", "))}</span></span><span class="name"><span class="nm"><b class="lbl">Get</b>${esc(t.get.map(pname).join(", "))}</span></span><span class="sub"><span class="meta">With ${esc(t.team)}</span></span></div>
+      <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button><span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span></div></div>`).join("")}</div>` : `<div class="panel muted">No one-for-one deal found that improves both lineups at similar value. Try building an offer above.</div>`) : ""}`;
 }
 
 // Points that run ahead of workload tend to fade, and the reverse. Workload predicted next-game scoring better than recent points in every test season for RB, WR and TE.
@@ -69,8 +71,8 @@ function viewRegress() {
   }
   const hot = rows.sort((a, b) => b.gap - a.gap).slice(0, 8), cold = [...rows].sort((a, b) => a.gap - b.gap).slice(0, 8);
   const max = Math.ceil(Math.max(...rows.map((r) => Math.max(r.u.form, r.x))) / 5) * 5 || 25;
-  const line = (r) => `<div class="row rowlink slotted" data-go="player/${r.id}"><span class="pos ${posClass(r.u.p)}">${posLabel(r.u.p)}</span><div class="who"><span class="name">${esc(pname(r.id))}</span><span class="meta">${esc(S.players[r.id].t)}, scoring ${f1(r.u.form)} on a workload worth ${f1(r.x)}</span></div>
-    <div class="proj"><span class="num">${sgn(r.gap)}</span><small>a game</small></div><span style="grid-column:2/-1">${luck(r.u.form, r.x, max)}</span></div>`;
+  const line = (r) => `<div class="row rowlink" data-go="player/${r.id}">${plate(S.players[r.id].t)}<div class="who"><span class="name"><span class="nm">${esc(pname(r.id))}</span><span class="pos ${posClass(r.u.p)}">${posLabel(r.u.p)}</span></span><span class="sub"><span class="meta">Scoring ${f1(r.u.form)}, workload ${f1(r.x)}</span></span></div>
+    <div class="proj"><span class="num">${sgn(r.gap)}</span><small>a game</small></div><div class="act" style="padding-top:2px">${luck(r.u.form, r.x, max)}</div></div>`;
   return `<p class="lede">Some players score more than their workload usually earns, on touchdowns and long plays that are hard to repeat. Others do the opposite. In our five-season test, adding a player's workload to his recent scoring improved next-game forecasts for backs, receivers and tight ends in every test.</p>
     <div class="legend" style="margin:12px 0 0"><span><i class="l-ring"></i>What the workload earns</span><span><i class="l-hot"></i>Scoring above it, likely to fade</span><span><i class="l-us"></i>Scoring below it, likely to rise</span></div>
     ${sec("Running hot", `<div class="list">${hot.map(line).join("")}</div>`, "Sell candidates")}${sec("Running cold", `<div class="list">${cold.map(line).join("")}</div>`, "Buy candidates")}`;
