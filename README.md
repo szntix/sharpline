@@ -61,6 +61,9 @@ A quiet neutral frame with turf green as the brand, and color only where it carr
 - **How likely:** one red-to-green scale for every chance (win chance, chance of a big game, percentiles). Red is darker than green so the two stay apart for red-green color-blind viewers, and the number is always printed beside the shade. Amounts with no good or bad stay neutral.
 - **Frame:** soft neutrals in light and dark, 1 px outlines, a faint shadow in light mode. A stronger edge is kept only where a boundary is what identifies a control or a selected state. Selection is a raised pill, and position bars take that position's color.
 - **Sizes:** nothing under 12 px, controls 44 px tall (segments at least 40 px wide), and 7 to 8 player rows fit on a 390 by 844 phone.
+- **Rows:** every row is a solid slate color and exactly two lines, so nothing is taller than anything else. The team shows only as a stripe on the left edge, beside its logo plate. Injury status is the ring chip beside the name; any other condition is at most two short tags on the right of the second line (Shootout, Model +4.5, Running hot). The full sentence for each tag is on the player page and is read out to screen readers.
+- **Slate bars:** each side's bar is one flat color from its own expected points on the red-to-green scale (about 16 low, 23 average, 30 high), and the notch in the middle marks an even split.
+- **Sub-menus:** every segmented bar is full width, so stacked bars share the same edges at any screen size.
 - **Range:** the likely range is not shown on list rows (how wide it is follows almost entirely from the projection). The player page shows it in plain words: a bad week, the average, a great week.
 - **Slate:** a ranked game list first, with the scatter map one tap away.
 
