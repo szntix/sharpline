@@ -1,6 +1,6 @@
 import { S, league, commit, render, pl, pname, invalidate } from "../state.js";
 import { sleeperApi } from "../api.js";
-import { SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
+import { TYPE_HELP, SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
 import { VERSION, BUILT } from "../version.js";
 import { esc, uid, toast, ago } from "../ui.js";
 import { sec } from "./shared.js";
@@ -43,6 +43,7 @@ function viewEditLeague(L) {
     <div class="panel"><div class="grid-fields">
       <label class="field">Name<input type="text" data-bind="lg" data-k="name" value="${esc(L.name)}"></label>
       <label class="field">League type<select data-bind="lg" data-k="type">${Object.entries(LEAGUE_TYPES).map(([k, v]) => `<option value="${k}" ${L.type === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <p class="small muted" style="grid-column:1/-1;margin:-2px 0 2px">${esc(TYPE_HELP[L.type] || "")}</p>
       <label class="field">Teams<input type="number" min="4" max="32" data-bind="lg" data-k="teams" value="${L.teams}"></label>
       <label class="field">Last regular week counted<input type="number" min="10" max="18" data-bind="lg" data-k="endWeek" value="${L.endWeek}"></label>
       <label class="field">Playoffs start week<input type="number" min="10" max="18" data-bind="lg" data-k="playoffStart" value="${L.playoffStart}"></label>

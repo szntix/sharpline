@@ -183,10 +183,13 @@ const AGE = {
   TE: [[23, 0.8], [24, 0.9], [25, 0.96], [29, 1], [30, 0.92], [31, 0.83], [32, 0.7]],
   QB: [[23, 0.9], [24, 0.95], [33, 1], [34, 0.93], [35, 0.85], [36, 0.75], [37, 0.65]],
 };
-function ageFactor(pos, age) {
+export function ageFactor(pos, age) {
   const c = AGE[pos]; if (!c || age == null) return 1;
   for (const [a, f] of c) if (age <= a) return f;
-  return c[c.length - 1][1];
+  // Past the last listed age the decline keeps going at the pace of the final step. It used to stop there, which treated a 34-year-old
+  // running back as never aging again and gave him more future value than a 28-year-old.
+  const [a1, f1] = c[c.length - 1], f0 = c[c.length - 2][1];
+  return Math.max(0.05, f1 * Math.pow(f1 / f0, age - a1));
 }
 
 export function rosValues(ctx, league, P) {
@@ -274,23 +277,51 @@ export function evaluateTrade(ctx, league, R, repl, myRoster, give, get, theirRo
   return { giveValue: val(give), getValue: val(get), lineupGain: (after - before) * weeks, theirLineupGain: theirs, weeks };
 }
 
-export function tradeIdeas(ctx, league, R, repl, myRoster, others) {
-  const ideas = [];
+// Every one-for-one swap is sorted into kept or dropped, so an empty list can say why. The kept list is exactly what it always was:
+// a swap must improve your lineup by more than 1 point over the season and theirs by more than 0.5, at similar value, across two positions.
+// Swaps that help you but not them are returned separately as "near", for an offer you might still pitch.
+// Value is measured against the best player actually on waivers in this league when its rosters are known, so bench depth that beats
+// the waiver wire is worth something. It never rises above the starting-lineup estimate, so a league with only some teams entered is unchanged.
+export function waiverLevel(ctx, league, R, fallback) {
+  if (!league.others?.length) return fallback;
+  const taken = new Set([...league.roster, ...(league.taken || []), ...league.others.flatMap((o) => o.roster || [])]), best = {};
+  for (const [id, v] of Object.entries(R)) { const p = ctx.players[id]; if (taken.has(id) || !p?.t) continue; if (v.per > (best[p.p] ?? -1)) best[p.p] = v.per; }
+  const out = { ...fallback }; for (const pos in best) out[pos] = Math.min(fallback[pos] ?? best[pos], best[pos]);
+  return out;
+}
+
+// Suggestions for the player in the calculator: every one-for-one swap involving him, best for your lineup first.
+export function focusedTrades(ctx, league, R, repl, side, ids, others) {
+  const rows = [], mine = league.roster.filter((id) => R[id]);
+  for (const x of ids) {
+    if (side === "get") { const team = others.find((o) => o.roster.includes(x)); if (!team) continue;
+      for (const a of mine) rows.push({ team: team.name, teamId: team.id, give: [a], get: [x], ...evaluateTrade(ctx, league, R, repl, league.roster, [a], [x], team.roster) }); }
+    else for (const team of others) for (const b of team.roster) if (R[b]) rows.push({ team: team.name, teamId: team.id, give: [x], get: [b], ...evaluateTrade(ctx, league, R, repl, league.roster, [x], [b], team.roster) });
+  }
+  return rows.map((r) => ({ ...r, score: r.lineupGain + 0.5 * Math.max(0, r.theirLineupGain) })).sort((a, b) => b.score - a.score).slice(0, 6);
+}
+
+export function tradeReport(ctx, league, R, repl, myRoster, others) {
+  const all = [], near = [], stats = { teams: 0, pairs: 0, samePos: 0, noGainYou: 0, noGainThem: 0, lopsided: 0 };
   const posOf = (id) => ctx.players[id]?.p;
   const mine = myRoster.filter((id) => R[id] && tradeValue(id, ctx, league, R, repl) > 0);
   for (const team of others || []) {
-    const theirs = (team.roster || []).filter((id) => R[id] && tradeValue(id, ctx, league, R, repl) > 0);
+    const theirs = (team.roster || []).filter((id) => R[id] && tradeValue(id, ctx, league, R, repl) > 0); stats.teams++;
     for (const a of mine) for (const b of theirs) {
-      if (posOf(a) === posOf(b)) continue; // same-position swaps rarely fix needs
+      stats.pairs++;
+      if (posOf(a) === posOf(b)) { stats.samePos++; continue; } // same-position swaps rarely fix needs
       const ev = evaluateTrade(ctx, league, R, repl, myRoster, [a], [b], team.roster);
-      if (ev.lineupGain > 1 && ev.theirLineupGain > 0.5) {
-        const fair = ev.giveValue / Math.max(1, ev.getValue);
-        if (fair > 0.7 && fair < 1.45) ideas.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain + 0.5 * ev.theirLineupGain });
-      }
+      const fair = ev.giveValue / Math.max(1, ev.getValue), fairOk = fair > 0.7 && fair < 1.45;
+      if (!(ev.lineupGain > 1)) { stats.noGainYou++; continue; }
+      if (!(ev.theirLineupGain > 0.5)) { stats.noGainThem++; if (fairOk) near.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain }); continue; }
+      if (!fairOk) { stats.lopsided++; continue; }
+      all.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain + 0.5 * ev.theirLineupGain });
     }
   }
-  return ideas.sort((x, y) => y.score - x.score).slice(0, 12);
+  all.sort((x, y) => y.score - x.score); near.sort((x, y) => y.lineupGain - x.lineupGain);
+  return { ideas: all.slice(0, 12), near: near.slice(0, 5), stats: { ...stats, mine: mine.length, kept: all.length } };
 }
+export const tradeIdeas = (...args) => tradeReport(...args).ideas;
 
 // ---------------------------------------------------------------------------
 // Waiver board

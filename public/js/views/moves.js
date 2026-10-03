@@ -1,5 +1,5 @@
 import { S, computed, league, pl, pname, leagueOrDefault } from "../state.js";
-import { waivers, tradeValue, evaluateTrade, tradeIdeas, optimal } from "../engine.js";
+import { waivers, tradeValue, evaluateTrade, tradeReport, focusedTrades, optimal } from "../engine.js";
 import { xppr } from "../model.js";
 import { SLOT_ELIG, SLOT_LABEL, positionsFor, inPosition } from "../scoring.js";
 import { esc, f1, f0, sgn, posLabel, posClass, plate, teamStripe } from "../ui.js";
@@ -74,6 +74,18 @@ function viewWaivers(L) {
     <div class="list">${rows.map((r) => prow(r.id, C, { gain: gainOf(r), act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 16px">No free agents at this position improve your lineup.</p>`}</div>`;
 }
 
+// An empty list should say why. A suggestion has to help BOTH lineups, so it needs a position where you hold more than your lineup uses
+// and the other team is short; these counts show where each possible swap fell out.
+function whyNoIdeas(rep) {
+  const s = rep.stats, line = (label, n) => (n ? `<dt>${label}</dt><dd>${n}</dd>` : "");
+  const lead = !s.mine ? "None of your players are worth more than a free agent at his position, so there is nothing to offer." : !s.pairs ? "Nobody on the other teams is worth more than a free agent at his position, so there is nothing to ask for." : `Checked ${s.pairs} one-for-one swaps across ${s.teams} ${s.teams === 1 ? "team" : "teams"}. Where they fell out:`;
+  return `<div class="panel"><div class="verdict">No deal found that helps both lineups</div><p class="small muted" style="margin:8px 0">${esc(lead)}</p>${s.pairs ? `<dl class="kv">${line("Same position", s.samePos)}${line("Would not improve your lineup", s.noGainYou)}${line("Improve yours, not theirs", s.noGainThem)}${line("Too lopsided in value", s.lopsided)}</dl>` : ""}
+    <p class="small muted" style="margin-top:10px">Suggestions come from surplus: a position where you hold more than your lineup uses. If you expected some, check that the rosters above are current, or build an offer yourself.</p></div>`;
+}
+const ideaRow = (t, L, { near = false } = {}) => `<div class="row trade"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
+      <div class="who"><span class="name"><b class="lbl">Give</b>${t.give.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="name"><b class="lbl">Get</b>${t.get.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="sub"><span class="meta">With ${esc(t.team)}</span></span></div>
+      <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button>${near ? `<span class="tag ${t.theirLineupGain < -0.5 ? "down" : "flat"}"><i></i>${t.theirLineupGain < -0.5 ? `they lose ${f0(-t.theirLineupGain)}` : "they break even"}</span>` : `<span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span>`}</div></div>`;
+
 function viewTrades(L) {
   const C = computed(L), { P, R, repl } = C, c = C.c;
   const tv = (id) => tradeValue(id, c, L, R, repl);
@@ -91,17 +103,27 @@ function viewTrades(L) {
       <p class="small muted" style="margin-top:10px">Value is points above a replacement-level player in your league over the remaining ${ev.weeks} weeks${L.playoffWeight ? ", with playoff weeks counting 1.5×" : ""}${L.type === "dynasty" ? ", plus 3 future seasons adjusted for age" : L.type === "keeper" ? ", plus part of next season" : ""}.</p>
       ${ev.theirLineupGain != null && ev.theirLineupGain > 0 && lg > 0 ? `<div class="callout" style="margin-top:10px">Both lineups improve, so this one has a real chance of being accepted.</div>` : ""}</div>`;
   }
-  const chips = (ids, side) => ids.map((id) => `<span class="chip">${posTag(id)}${esc(pname(id))} <span class="muted small">${f0(tv(id))}</span><button aria-label="Remove ${esc(pname(id))}" data-act="tr-rm" data-side="${side}" data-id="${id}">×</button></span>`).join("");
-  const myOpts = L.roster.filter((id) => !give.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))} (${f0(tv(id))})</option>`).join("");
-  const theirOpts = partner ? partner.roster.filter((id) => !get.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))} (${f0(tv(id))})</option>`).join("") : "";
-  const ideas = L.others.length ? (C.cache.ideas || (C.cache.ideas = tradeIdeas(c, L, R, repl, L.roster, L.others))) : [];
+  // A zero means "no better than a free agent at his position" (depth), which is different from having no projection at all.
+  const tvLabel = (id) => (!R[id] ? "no projection" : tv(id) > 0 ? f0(tv(id)) : "depth");
+  const ageBit = (id) => ((L.type === "dynasty" || L.type === "keeper") && S.players[id]?.a ? `, ${Math.floor(S.players[id].a)}` : "");
+  const chips = (ids, side) => ids.map((id) => `<span class="chip">${posTag(id)}${esc(pname(id))} <span class="muted small">${ageBit(id) ? `age ${Math.floor(S.players[id].a)} · ` : ""}${tvLabel(id)}</span><button aria-label="Remove ${esc(pname(id))}" data-act="tr-rm" data-side="${side}" data-id="${id}">×</button></span>`).join("");
+  const myOpts = L.roster.filter((id) => !give.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))}${ageBit(id)} (${tvLabel(id)})</option>`).join("");
+  const theirOpts = partner ? partner.roster.filter((id) => !get.includes(id)).sort((a, b) => tv(b) - tv(a)).map((id) => `<option value="${id}">${esc(posLabel(S.players[id]?.p))} · ${esc(pname(id))}${ageBit(id)} (${tvLabel(id)})</option>`).join("") : "";
+  // When only one side of the calculator is filled, the suggestions follow that player.
+  const focus = L.others.length && (give.length ? !get.length : get.length) ? { side: give.length ? "give" : "get", ids: give.length ? give : get } : null;
+  const short = (id) => pname(id).split(" ").slice(-1)[0], fRows = focus ? focusedTrades(c, L, R, repl, focus.side, focus.ids, L.others) : [];
+  const freeAgent = focus?.side === "get" && focus.ids.every((id) => !L.others.some((o) => o.roster.includes(id)));
+  const focusHtml = !focus ? "" : sec(focus.side === "get" ? `Ways to get ${esc(focus.ids.map(short).join(" and "))}` : `What ${esc(focus.ids.map(short).join(" and "))} could bring back`,
+    freeAgent ? `<div class="panel muted">${esc(focus.ids.map(pname).join(", "))} is not on another team in your league, so you can add him without a trade.</div>`
+    : fRows.length ? `<p class="small muted" style="margin-bottom:10px">Every one-for-one swap, best for your lineup first. Review loads it above.</p><div class="list">${fRows.map((t) => ideaRow(t, L, { near: !(t.theirLineupGain > 0.5) })).join("")}</div>` : `<div class="panel muted">No one-for-one swap found.</div>`);
+  const rep = L.others.length ? (C.cache.report || (C.cache.report = tradeReport(c, L, R, repl, L.roster, L.others))) : null, ideas = rep?.ideas || [];
   const preview = give.length && get.length ? tradePreview(L, C, give, get, partner) : "";
   return `${syncLine(L)}<label class="field" style="max-width:340px">Trading with<select data-bind="partner"><option value="">Anyone (search all players)</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === S.ui.partner ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
     <div class="trade-cols"><div class="panel"><h3 class="h2">You give</h3><div class="chips" style="margin:10px 0">${chips(give, "give")}</div><select data-bind="tr-give" aria-label="Add a player you give"><option value="">Add from your roster…</option>${myOpts}</select></div>
       <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}${preview}
-    ${L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => `<div class="row trade"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
-      <div class="who"><span class="name"><b class="lbl">Give</b>${t.give.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="name"><b class="lbl">Get</b>${t.get.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="sub"><span class="meta">With ${esc(t.team)}</span></span></div>
-      <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button><span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span></div></div>`).join("")}</div>` : `<div class="panel muted">No one-for-one deal found that improves both lineups at similar value. Try building an offer above.</div>`) : ""}`;
+    ${focusHtml}
+    ${focus ? "" : !L.others.length ? sec("Trade ideas", `<div class="panel"><div class="verdict">Trade ideas need the other teams</div><p class="small muted" style="margin:8px 0 12px">Suggestions compare your roster with each team in your league, so there is nothing to suggest until they are added. You can still build an offer yourself above.</p>${L.sleeper ? `<p class="small muted">Refresh rosters above to pull them from Sleeper.</p>` : `<button class="btn sm" data-act="edit-teams" data-id="${L.id}">Add other teams</button>`}</div>`) : ""}${!focus && L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => ideaRow(t, L)).join("")}</div>` : whyNoIdeas(rep)) : ""}
+    ${!focus && L.others.length && rep.near.length && ideas.length < 3 ? sec("Worth a pitch", `<p class="small muted" style="margin-bottom:10px">These help your lineup but not theirs, so you would have to sell it. Nothing here is a fair win for both sides.</p><div class="list">${rep.near.map((t) => ideaRow(t, L, { near: true })).join("")}</div>`, "Helps you, not them") : ""}`;
 }
 
 // Points that run ahead of workload tend to fade, and the reverse. Workload predicted next-game scoring better than recent points in every test season for RB, WR and TE.

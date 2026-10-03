@@ -102,7 +102,7 @@ a.link { display: inline-flex; align-items: center; }
 /* One segmented bar for every choice. The selected segment is a raised pill; position segments take that position's color. */
 .seg, .thresholds { display: flex; background: var(--paper); border: 1px solid var(--hair2); border-radius: 14px; overflow-x: auto; scrollbar-width: none; width: 100%; max-width: 100%; gap: 0; }
 .seg::-webkit-scrollbar, .thresholds::-webkit-scrollbar { display: none; }
-.seg button, .thresholds button { flex: 1 1 0; min-width: min-content; min-height: 44px; border: 0; background: transparent; padding: 0 8px; font-weight: 750; font-size: 14px; font-stretch: 88%; letter-spacing: .02em; color: var(--ink2); white-space: nowrap; position: relative; isolation: isolate; border-radius: 0; }
+.seg button, .thresholds button { flex: 1 1 0; min-width: min-content; min-height: 44px; border: 0; background: transparent; padding: 0 8px; font-weight: 750; font-size: 13px; font-stretch: 88%; letter-spacing: .01em; color: var(--ink2); white-space: nowrap; position: relative; isolation: isolate; border-radius: 0; }
 .seg button + button, .thresholds button + button { background: linear-gradient(var(--hair2), var(--hair2)) left center / 1px 46% no-repeat; }
 .seg button[aria-pressed="true"], .thresholds button[aria-pressed="true"] { color: var(--sci, var(--neu-ink)); font-weight: 850; background-image: none; }
 .seg button[aria-pressed="true"] + button, .thresholds button[aria-pressed="true"] + button { background-image: none; }

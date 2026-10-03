@@ -93,6 +93,12 @@ export const ROSTER_PRESETS = {
 };
 
 export const LEAGUE_TYPES = { redraft: "Redraft", keeper: "Keeper", dynasty: "Dynasty", bestball: "Best ball" };
+export const TYPE_HELP = {
+  redraft: "Only this season counts.",
+  keeper: "Trade values add next season at a lower weight, with older players discounted for age.",
+  dynasty: "Trade values add the next three seasons, with older players discounted for age (running backs fade first).",
+  bestball: "There are no weekly lineups: your best score each week counts, so players with big swings are worth more.",
+};
 
 // ---- threshold bonuses need a probability, not an average ----
 function pOver(mean, threshold, sigma) {

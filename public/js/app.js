@@ -22,7 +22,8 @@ function applyTheme() {
   try { document.documentElement.dataset.tint = localStorage.getItem("sharpline.tint") === "on" ? "on" : "off"; } catch {}
   const t = localStorage.getItem("sharpline.theme") || "auto";
   if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) ? "#151517" : "#eae8e1");
+  const bar = (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) ? "#151517" : "#eae8e1";
+  if (document.getElementById("splash")) window.__themeColor = bar; else document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bar);   // the opening screen keeps the bar turf green until it is gone
 }
 applyTheme();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { applyTheme(); render(); });
@@ -68,6 +69,7 @@ function render() {
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch {} } }
   if (window.scrollY !== y && S._keepScroll) window.scrollTo(0, y);
   document.title = "Sharpline";
+  window.__hideSplash?.();
   if (["week", "players", "moves"].includes(name)) queueMicrotask(() => ensureRosters());
 }
 window.addEventListener("hashchange", () => { S._keepScroll = false; render(); window.scrollTo(0, 0); });
@@ -86,6 +88,7 @@ function renderAuth(msg = "", keep = {}) {
       <label class="field">PIN<input type="password" name="pin" autocomplete="current-password" inputmode="numeric" required minlength="4" value="${v(keep.pin)}"></label>
       <label class="field">Invite code <span class="muted">(only needed to create an account)</span><input type="text" name="invite" autocomplete="off" autocapitalize="none" autocorrect="off" value="${v(keep.invite)}"></label>
       <div class="toolbar"><button class="btn primary" name="action" value="login" type="submit">Sign in</button><button class="btn" name="action" value="register" type="submit">Create account</button></div></form></div>`;
+  window.__hideSplash?.();
   const form = document.getElementById("authform");
   let tapped = "";
   form.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", () => { tapped = btn.value; }));      // runs before the form is submitted, on every browser
@@ -196,6 +199,7 @@ $app.addEventListener("click", async (e) => {
     case "edit-league": S.ui.editing = S.ui.editing === id ? null : id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId(S.ui.editing ? "league-editor" : "leagues-list"); break;
     case "edit-roster": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId("league-roster"); break;
     case "jump": scrollToId(v); break;
+    case "edit-teams": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId("league-teams"); break;
     case "edit-close": S.ui.editing = null; render(); scrollToId("leagues-list"); break;
     case "league-rm": if (confirm("Delete this league? This can't be undone.")) { S.profile.leagues = S.profile.leagues.filter((l) => l.id !== id); if (S.profile.active === id) S.profile.active = S.profile.leagues[0]?.id || null; S.ui.editing = null; commit("League deleted"); } break;
     case "slot-add": { const E = editingLeague(); E.slots.push(document.getElementById("slot-add").value); E.rosterPreset = "custom"; commit(); break; }
