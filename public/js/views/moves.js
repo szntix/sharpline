@@ -67,10 +67,10 @@ function viewWaivers(L) {
   const rows = W.rows.filter((r) => inPosition(pl(r.id)?.p, pos)).sort((a, b) => (mode === "week" ? b.weekGain - a.weekGain || b.proj - a.proj : b.rosGain - a.rosGain || b.per - a.per)).slice(0, 40);
   const lede = `<div><p class="lede">Ranked by how much each free agent would add to your starting lineup. ${manual ? "Mark players other teams already have so they drop off this list." : "Rostered players are removed using your Sleeper league."}</p>${syncLine(L, "margin-top:6px")}</div>`;
   const segBar = (label, opts, cur, act, cls = () => "") => `<div class="seg" role="group" aria-label="${label}">${opts.map(([k, l]) => `<button data-act="${act}" data-v="${k}" class="${cls(k)}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
-  const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", FLEX: "flex", K: "k", DEF: "dst" };
+  const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", K: "k", DEF: "dst" };
   // the gain is a short number in the action row; the horizon bar above says whether it is the rest of the season or this week
   const gainOf = (r) => mode === "week" ? (r.weekGain > 0.05 ? `${sgn(r.weekGain)} pts` : "no gain") : (r.rosGain > 0.5 ? `${sgn(r.rosGain, 0)} pts` : "no gain");
-  return `${lede}${segBar("Horizon", [["ros", "Rest of season"], ["week", "This week"]], mode, "wv-mode")}${segBar("Position", positions.map((p) => [p, p === "ALL" ? "All" : p === "FLEX" ? "Flex" : posLabel(p)]), pos, "wv-pos", (k) => POSCLS[k] || "")}${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}
+  return `${lede}${segBar("Horizon", [["ros", "Rest of season"], ["week", "This week"]], mode, "wv-mode")}${segBar("Position", positions.map((p) => [p, p === "ALL" ? "ALL" : posLabel(p)]), pos, "wv-pos", (k) => POSCLS[k] || "")}${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}
     <div class="list">${rows.map((r) => prow(r.id, C, { gain: gainOf(r), act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 16px">No free agents at this position improve your lineup.</p>`}</div>`;
 }
 

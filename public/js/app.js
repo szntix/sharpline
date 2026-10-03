@@ -157,6 +157,12 @@ const endDrag = () => { if (dragging) { plotsOf(dragging).forEach((s) => { const
 $app.addEventListener("pointerup", endDrag); $app.addEventListener("pointercancel", endDrag);
 
 // ---------------------------------------------------------------- clicks
+// Bring a section into view once it exists. The editor is far down a long page, so opening it without scrolling looks like a dead button.
+function scrollToId(id, tries = 14) {
+  const el = document.getElementById(id);
+  if (el) { el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); el.focus?.({ preventScroll: true }); return; }
+  if (tries > 0) setTimeout(() => scrollToId(id, tries - 1), 60);
+}
 const editingLeague = () => S.profile.leagues.find((l) => l.id === S.ui.editing);
 function rosterFor(target) {
   const L = editingLeague() || league(); if (!L) return null;
@@ -185,16 +191,18 @@ $app.addEventListener("click", async (e) => {
     case "proof-pos": S.ui.proofPos = v; render(); break;
     case "theme": localStorage.setItem("sharpline.theme", v); applyTheme(); render(); break;
     case "tint": try { localStorage.setItem("sharpline.tint", v === "on" ? "on" : "off"); } catch {} applyTheme(); render(); break;
-    case "new-league": { const nl = newLeague(`League ${S.profile.leagues.length + 1}`); S.profile.leagues.push(nl); S.profile.active = nl.id; S.ui.editing = nl.id; commit(); break; }
+    case "new-league": { const nl = newLeague(`League ${S.profile.leagues.length + 1}`); S.profile.leagues.push(nl); S.profile.active = nl.id; S.ui.editing = nl.id; commit(); scrollToId("league-editor"); break; }
     case "use-league": S.profile.active = id; S.ui.give = []; S.ui.get = []; S.ui.partner = ""; commit("League switched"); break;
-    case "edit-league": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); break;
-    case "edit-close": S.ui.editing = null; render(); break;
+    case "edit-league": S.ui.editing = S.ui.editing === id ? null : id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId(S.ui.editing ? "league-editor" : "leagues-list"); break;
+    case "edit-roster": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId("league-roster"); break;
+    case "jump": scrollToId(v); break;
+    case "edit-close": S.ui.editing = null; render(); scrollToId("leagues-list"); break;
     case "league-rm": if (confirm("Delete this league? This can't be undone.")) { S.profile.leagues = S.profile.leagues.filter((l) => l.id !== id); if (S.profile.active === id) S.profile.active = S.profile.leagues[0]?.id || null; S.ui.editing = null; commit("League deleted"); } break;
     case "slot-add": { const E = editingLeague(); E.slots.push(document.getElementById("slot-add").value); E.rosterPreset = "custom"; commit(); break; }
     case "slot-rm": { const E = editingLeague(); E.slots.splice(Number(el.dataset.i), 1); E.rosterPreset = "custom"; commit(); break; }
     case "team-add": { const E = editingLeague(); const t = { id: Math.random().toString(36).slice(2, 10), name: `Team ${E.others.length + 2}`, roster: [] }; E.others.push(t); S.ui.openTeam = t.id; commit(); break; }
     case "team-rm": { const E = editingLeague(); E.others = E.others.filter((o) => o.id !== id); if (E.opponent === id) E.opponent = null; commit(); break; }
-    case "rm-player": { const r = rosterFor(el.dataset.target); if (r) { const i = r.indexOf(id); if (i >= 0) r.splice(i, 1); } commit(); break; }
+    case "rm-player": { const r = rosterFor(el.dataset.target); let gone = false; if (r) { const i = r.indexOf(id); if (i >= 0) { r.splice(i, 1); gone = true; } } commit(gone ? `Removed ${pname(id)}` : undefined); break; }
     case "pick": {
       const target = el.dataset.target;
       if (target.startsWith("cmp")) { const first = target.split(":")[1]; location.hash = first ? `compare/${first}/${id}` : `compare/${id}`; break; }

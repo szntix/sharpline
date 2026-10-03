@@ -31,7 +31,7 @@ export function viewPlayers() {
   const have = kdef ? Object.values(S.players).filter((x) => x.p === plPos).length : 0, priced = kdef ? ids.filter((id) => P.proj[id].mean > 0).length : 0;
   const kdefNote = !kdef ? "" : !have ? `<p class="lede" style="margin-top:10px">The player list has no ${word}. The page at /api/diag shows where they drop out.</p>`
     : !priced ? `<p class="lede" style="margin-top:10px">None of these ${word} has a projection yet. A game line has to be posted first, and this league's scoring must include ${word === "kickers" ? "kicker" : "defense"} rules.</p>` : "";
-  const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", FLEX: "flex", K: "k", DEF: "dst" };
+  const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", K: "k", DEF: "dst" };
   const seg = (name, cur, opts, act, cls = () => "") => `<div class="seg" role="group" aria-label="${name}">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${cls(v)}" aria-pressed="${cur === v}">${l}</button>`).join("")}</div>`;
   const pick = S.ui.pick, pickMode = S.ui.cmpMode || pick.length > 0;
   const opt = (v, l, cur) => `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`;
@@ -40,7 +40,7 @@ export function viewPlayers() {
   return `${feedError()}<div class="titlerow"><h1 class="h1">Players</h1><span class="muted small">Week ${S.feed.week} · ${L ? esc(L.name) : "standard PPR"} scoring</span></div>${pulse(S.feed)}${expertsNote(S.feed)}
     <div class="stack" style="margin-top:12px">
       <div class="searchrow"><input type="search" id="pl-q" placeholder="Search players or teams" value="${esc(plQ)}" aria-label="Search players" autocomplete="off"><button class="iconbtn" data-act="cmp-mode" aria-pressed="${pickMode}" aria-label="${pickMode ? "Stop comparing" : "Compare two players"}" title="${pickMode ? "Stop comparing" : "Compare two players"}">${CMP}</button></div>
-      ${seg("Position", plPos, avail.map((p) => [p, p === "ALL" ? "All" : p === "FLEX" ? "Flex" : posLabel(p)]), "pl-pos", (v) => POSCLS[v] || "")}
+      ${seg("Position", plPos, avail.map((p) => [p, p === "ALL" ? "ALL" : posLabel(p)]), "pl-pos", (v) => POSCLS[v] || "")}
     </div>
     ${L?.sleeper && plFilter !== "all" ? syncLine(L, "margin-top:12px") : ""}${kdefNote}<div class="list" style="margin-top:12px">${band}<div class="sortnote">${esc(sortNote(plSort, plPos))}</div>${shown.map((id) => prow(id, C, { pick: pickMode, showExp: plSort === "experts", value: plSort === "model" ? "model" : "blend" })).join("") || `<p class="muted" style="padding:20px 16px">No players match.</p>`}</div>
     ${ids.length > shown.length ? `<div style="text-align:center;margin-top:12px"><button class="btn" data-act="pl-more">Show more</button></div>` : ""}

@@ -46,7 +46,7 @@ export function viewWeek() {
   return `${feedError()}${hero}${pulse(S.feed)}${expertsNote(S.feed)}<div class="stack" style="margin-top:14px">${swap}</div>
     ${notes.length ? sec("Things to know", noteList(notes)) : ""}
     ${sec("Starters", `<div class="list">${starters}</div>`, `${f1(m.best.total)} projected`)}
-    ${sec("Bench", `<div class="list">${bench || `<div class="row"><div></div><div class="muted">No bench players.</div></div>`}</div>`)}`;
+    ${sec("Bench", `<div class="list">${bench || `<div class="row"><div></div><div class="muted">No bench players.</div></div>`}</div>`, L.sleeper ? "" : `<button class="link" data-act="edit-roster" data-id="${L.id}">Edit roster</button>`)}`;
 }
 
 function weekPicker(L, hasOpp) {

@@ -69,7 +69,7 @@ export const SLOT_ELIG = {
   QB: ["QB"], RB: ["RB"], WR: ["WR"], TE: ["TE"], K: ["K"], DEF: ["DEF"],
   FLEX: ["RB", "WR", "TE"], WRRB_FLEX: ["RB", "WR"], REC_FLEX: ["WR", "TE"], SUPER_FLEX: ["QB", "RB", "WR", "TE"],
 };
-export const SLOT_LABEL = { FLEX: "Flex", WRRB_FLEX: "W/R", REC_FLEX: "W/T", SUPER_FLEX: "SF", DEF: "DST" };
+export const SLOT_LABEL = { FLEX: "FLEX", WRRB_FLEX: "W/R", REC_FLEX: "W/T", SUPER_FLEX: "SF", DEF: "DST" };
 
 // Which position tabs a league should show. A position appears only if some starting slot can use it, so a
 // league without a kicker or defense never sees those tabs. "FLEX" appears when any slot takes more than one position.
