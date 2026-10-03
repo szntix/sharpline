@@ -19,6 +19,17 @@ function splitLine(line) {
 }
 
 // Reads only the columns we need from nflverse's very wide weekly stats file.
+// Efficiency columns from the same file, kept for the player page and Compare. Missing columns read as 0, so an older file still works.
+const ADV = ["attempts", "sacks_suffered", "passing_epa", "passing_cpoe", "receptions", "receiving_air_yards", "receiving_yards_after_catch", "receiving_epa", "rushing_epa", "air_yards_share", "wopr", "passing_first_downs", "rushing_first_downs", "receiving_first_downs"];
+function advanced(now) {
+  const g = now.length; if (!g) return null;
+  const t = ADV.map(() => 0); let tg = 0, cr = 0, cpoeW = 0;
+  for (const x of now) { const a = x.adv || []; for (let i = 0; i < ADV.length; i++) t[i] += a[i] || 0; tg += x.tgt; cr += x.car; cpoeW += (a[0] || 0) * (a[3] || 0); }
+  const [att, sk, pepa, , rec, ray, yac, repa, rushepa, ays, wopr, pfd, rfd, refd] = t, k = (v, d) => +v.toFixed(d);
+  return { g, epaDb: att + sk >= 20 ? k(pepa / (att + sk), 3) : null, cpoe: att >= 20 ? k(cpoeW / att, 1) : null, rushEpa: cr >= 10 ? k(rushepa / cr, 3) : null,
+    recEpa: tg >= 6 ? k(repa / tg, 3) : null, adot: tg >= 6 ? k(ray / tg, 1) : null, yac: rec >= 4 ? k(yac / rec, 1) : null, catchRate: tg >= 6 ? k(rec / tg, 3) : null,
+    ays: k(ays / g, 3), wopr: k(wopr / g, 3), fd: k((pfd + rfd + refd) / g, 1) };
+}
 async function seasonRows(season) {
   const text = await getText(`${NFLV}/stats_player/stats_player_week_${season}.csv`, { timeout: 45000 });
   const lines = text.split("\n"); const head = splitLine(lines[0].replace(/\r$/, ""));
@@ -31,7 +42,8 @@ async function seasonRows(season) {
     const c = splitLine(l.replace(/\r$/, ""));
     if (c[ix.season_type] !== "REG" || !POS.includes(c[ix.position])) continue;
     out.push([c[ix.player_id], c[ix.position], +c[ix.week], abbr(c[ix.team]), abbr(c[ix.opponent_team]),
-      +(+c[ix.fantasy_points_ppr] || 0).toFixed(2), +c[ix.targets] || 0, +c[ix.carries] || 0, +(+c[ix.target_share] || 0).toFixed(3), c[ix.player_display_name] || ""]);
+      +(+c[ix.fantasy_points_ppr] || 0).toFixed(2), +c[ix.targets] || 0, +c[ix.carries] || 0, +(+c[ix.target_share] || 0).toFixed(3), c[ix.player_display_name] || "",
+      ADV.map((k) => (ix[k] != null ? +c[ix[k]] || 0 : 0))]);
   }
   return out;
 }
@@ -45,11 +57,11 @@ export function ewmaNext(values, mu, half = MODEL.halfLife, w0 = MODEL.priorWeig
 }
 
 export async function computeUsage() {
-  return cached("usage-v3", 60 * 60e3, async () => {
+  return cached("usage-v4", 60 * 60e3, async () => {
     const state = await nflState(); const season = Number(state.season);
     const [prev, cur, players] = await Promise.all([
-      cached(`rows-${season - 1}`, 30 * 864e5, () => seasonRows(season - 1)).catch(() => []),
-      cached(`rows-${season}`, 50 * 60e3, () => seasonRows(season)),
+      cached(`rows2-${season - 1}`, 30 * 864e5, () => seasonRows(season - 1)).catch(() => []),
+      cached(`rows2-${season}`, 50 * 60e3, () => seasonRows(season)),
       loadPlayers(),
     ]);
     const g2s = await gsisToSleeper(players);
@@ -57,8 +69,8 @@ export async function computeUsage() {
     const all = [...tag(prev, season - 1), ...tag(cur, season)];
     const byPlayer = {}, allowed = {}, thisYear = {};
     for (const r of all) {
-      const [s, gsis, pos, week, team, opp, ppr, tgt, car, ts, name] = r;
-      (byPlayer[gsis] ||= []).push({ s, week, ppr, tgt, car, ts, opp, pos });
+      const [s, gsis, pos, week, team, opp, ppr, tgt, car, ts, name, adv] = r;
+      (byPlayer[gsis] ||= []).push({ s, week, ppr, tgt, car, ts, opp, pos, adv });
       if (s === season) { const c = (thisYear[gsis] ||= { name: "", pos, pts: 0 }); c.pts += ppr; if (name) c.name = name; }
       const k = `${opp}|${pos}|${s}|${week}`; allowed[k] = (allowed[k] || 0) + ppr;
     }
@@ -84,7 +96,7 @@ export async function computeUsage() {
         form: +ewmaNext(seq.map((x) => x.ppr), mu.form[pos]).toFixed(2), tgt: +ewmaNext(seq.map((x) => x.tgt), mu.tgt[pos]).toFixed(2),
         car: +ewmaNext(seq.map((x) => x.car), mu.car[pos]).toFixed(2), ts: +ewmaNext(seq.map((x) => x.ts), mu.ts[pos]).toFixed(3),
         ppg: now.length ? +(now.reduce((t, x) => t + x.ppr, 0) / now.length).toFixed(1) : null,
-        log: now.map((x) => [x.week, x.ppr, x.tgt, x.car, x.opp]),
+        log: now.map((x) => [x.week, x.ppr, x.tgt, x.car, x.opp]), adv: advanced(now),
       };
     }
     // How generous each defense has been to each position (recency weighted, relative to the league average)

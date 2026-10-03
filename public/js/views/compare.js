@@ -39,11 +39,25 @@ export function viewCompare(a, b) {
   if (pa.p !== "QB" && pb.p !== "QB") rows.push({ label: "Targets/game", a: u(a)?.tgt, b: u(b)?.tgt, fa: f1(u(a)?.tgt), fb: f1(u(b)?.tgt) }, { label: "Target share", tol: 0.005, a: u(a)?.ts, b: u(b)?.ts, fa: u(a) ? pct(u(a).ts) : "–", fb: u(b) ? pct(u(b).ts) : "–" });
   if (["RB", "QB"].includes(pa.p) || ["RB", "QB"].includes(pb.p)) rows.push({ label: "Carries/game", a: u(a)?.car, b: u(b)?.car, fa: f1(u(a)?.car), fb: f1(u(b)?.car) });
   const ea = C.ranks.exp[a], eb = C.ranks.exp[b];
+  const xad = (id) => u(id)?.adv, xpct = (v) => (v * 100).toFixed(1) + "%", xsg = (d) => (v) => (v >= 0 ? "+" : "") + v.toFixed(d);
+  const XADV = [["epaDb", "EPA/dropback", xsg(2)], ["cpoe", "CPOE", xsg(1)], ["rushEpa", "EPA/carry", xsg(2)], ["recEpa", "EPA/target", xsg(2)], ["wopr", "WOPR", (v) => v.toFixed(2)], ["ays", "Air yards share", xpct], ["adot", "Depth of target", (v) => v.toFixed(1)], ["yac", "YAC/catch", (v) => v.toFixed(1)], ["catchRate", "Catch rate", xpct]];
+  for (const [k, label, fmt] of XADV) if (xad(a)?.[k] != null && xad(b)?.[k] != null) rows.push({ label, a: xad(a)[k], b: xad(b)[k], fa: fmt(xad(a)[k]), fb: fmt(xad(b)[k]), tol: 0.0005, adv: k });
   if (ea && eb) rows.push({ label: "Expert rank", a: ea, b: eb, fa: posLabel(pa.p) + ea, fb: posLabel(pb.p) + eb, lowerBetter: true });
   const fa = quantile(A, 0.1), fb = quantile(B, 0.1), ca = quantile(A, 0.9), cb = quantile(B, 0.9);
   const verdict = [`<b>Lean ${esc(short(leader[1].n))}</b>: ${Math.abs(gap).toFixed(1)} points ahead on the projection, and ${f0(leader[3] * 100)} times in 100 he outscores the other.`];
   if (leader[0] === a ? fa < fb - 1.5 : fb < fa - 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher floor, so he's the safer pick if you're protecting a lead.`);
   if (leader[0] === a ? cb > ca + 1.5 : ca > cb + 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher ceiling, so he's the swing if you need a big game.`);
+  // Each bar is measured against this week's best at the position(s) being compared, with a tick for a typical starter (the last starter league-wide).
+  const xpool = Object.keys(C.P.proj).filter((id) => [pa.p, pb.p].includes(pl(id)?.p) && C.P.proj[id].mean > 0);
+  const xk = Math.max(1, (S.profile?.leagues?.find((l) => l.id === S.profile.active)?.teams || 12) * (["RB", "WR"].includes(pa.p) ? 2 : 1));
+  const xmetric = { "Projection": (id) => C.P.proj[id].mean, "Bad week": (id) => quantile(C.P.proj[id], 0.1), "Great week": (id) => quantile(C.P.proj[id], 0.9), "Team points": (id) => C.P.proj[id].implied, "Recent avg": (id) => u(id)?.form,
+    "Targets/game": (id) => u(id)?.tgt, "Target share": (id) => u(id)?.ts, "Carries/game": (id) => u(id)?.car, "Expert rank": (id) => C.ranks.exp[id] };
+  for (const r of rows) {
+    const f = r.adv ? (id) => (u(id)?.adv?.g >= 2 ? u(id).adv[r.adv] : null) : xmetric[r.label]; if (!f) continue;
+    const vals = xpool.map(f).filter((v) => typeof v === "number" && isFinite(v)).sort((x, y) => y - x); if (vals.length < 3) continue;
+    if (r.lowerBetter) { r.n = Math.max(vals.length, r.a, r.b); r.ref = Math.min(xk, r.n); r.max = 1; }
+    else { r.max = Math.max(vals[0], r.a ?? -Infinity, r.b ?? -Infinity); r.min = Math.min(0, vals[vals.length - 1], r.a ?? 0, r.b ?? 0); r.ref = vals[Math.min(vals.length - 1, xk - 1)]; }
+  }
   return `<a class="link" href="#compare" style="display:inline-block;margin:6px 0">Change players</a>
     <div class="vs-head" style="--ta:${tA.plate};--tai:${tA.plateInk};--tb:${tB.plate};--tbi:${tB.plateInk}"><div class="a">${emblem(pa.t)}<div class="n">${esc(pa.n)}</div><div class="p">${esc(pa.t || "FA")}, ${A.opp ? `${A.game.home === pa.t ? "vs" : "at"} ${esc(A.opp)}` : "no game"}</div><div class="pr">${f1(A.mean)}</div></div>
       <div class="mid"><div><span class="num">${Math.round(pA * 100)}%</span><small>${esc(short(pa.n))} scores more</small></div></div>
@@ -56,7 +70,7 @@ export function viewCompare(a, b) {
       <div class="toolbar" style="gap:8px;margin:16px 0 2px">${plate(pb.t, { mono: true })}<b>${esc(pb.n)}</b></div>${dotplot(B, { max, color: vB, threshold: thr, id: "cmpB", name: pb.n, group: gkey, who: short(pb.n) })}
       <div class="cap" id="cmpB-cap">${dotCaption(B, thr, short(pb.n))}</div>
       <p class="small muted" style="margin-top:10px">Same ruler and the same line for both. The more spread out the dots, the less predictable the week.</p>`)}
-    ${sec("Side by side", mirrorRows(rows, { ta: vA, tb: vB }) + `<p class="small muted" style="margin-top:10px">The solid bar wins each row. A bad week and a great week are the 1-in-10 outcomes. For expert rank, lower is better.</p>`, "Solid bar wins")}
+    ${sec("Side by side", mirrorRows(rows, { ta: vA, tb: vB }) + `<p class="small muted" style="margin-top:10px">Each bar is measured against this week's best at the position: a full bar is the leader. The tick marks a typical starter (the last one in a league your size). The solid bar is the better of the two. A bad week and a great week are the 1-in-10 outcomes; for expert rank, lower is better.</p>`, "Solid bar wins")}
     ${sec("How much to trust this", `<p>${recent ? `Across ${recent.n.toLocaleString()} past ${posLabel(pa.p)} pairings with a gap like this (${recent.gap[0]} to ${recent.gap[1] > 50 ? "more than 8" : recent.gap[1]} projected points), the higher-projected player scored more <b>${Math.round(recent.higher_wins * 100)}%</b> of the time.` : "Different positions can't be checked against past pairings, so this percentage uses the average of the two positions' history."} Projections narrow the odds but never settle them: even an 8-point edge loses about one time in seven.</p>
       ${rho ? `<p class="small muted" style="margin-top:8px">These two are ${A.team === B.team ? "teammates" : "opponents"}, so their scores tend to move ${rho > 0 ? "together" : "against each other"} (correlation ${rho.toFixed(2)}). That is included.</p>` : ""}`)}`;
 }

@@ -1,8 +1,8 @@
-import { S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
-import { matchup, bestBallExpectation, lineupNotes } from "../engine.js";
+import { SOURCES, S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
+import { optimal, matchup, bestBallExpectation, lineupNotes } from "../engine.js";
 import { esc, f1, f0, pct, ago, posLabel } from "../ui.js";
 import { drive } from "../charts.js";
-import { pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
+import { srcBar, pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
 import { SLOT_LABEL } from "../scoring.js";
 
 const title = () => `Week ${S.feed?.week ?? S.week ?? ""}`;
@@ -45,6 +45,7 @@ export function viewWeek() {
   const bench = benchIds.map((id) => prow(id, C, { sig: true, dim: true })).join("");
   return `${feedError()}${hero}${pulse(S.feed)}${expertsNote(S.feed)}<div class="stack" style="margin-top:14px">${swap}</div>
     ${notes.length ? sec("Things to know", noteList(notes)) : ""}
+    ${srcPanel(L, C)}
     ${sec("Starters", `<div class="list">${starters}</div>`, `${f1(m.best.total)} projected`)}
     ${sec("Bench", `<div class="list">${bench || `<div class="row"><div></div><div class="muted">No bench players.</div></div>`}</div>`, L.sleeper ? "" : `<button class="link" data-act="edit-roster" data-id="${L.id}">Edit roster</button>`)}`;
 }
@@ -65,4 +66,14 @@ function welcome(C) {
       <p style="max-width:46ch">${nGames} games, ${priced} with betting lines. Add your league to get start/sit advice, waiver targets and trade ideas in your scoring.</p>
       <div class="toolbar" style="margin-top:14px"><a class="btn solid" href="#leagues" data-act="imp-start">Import from Sleeper</a><a class="btn" href="#leagues" data-act="new-league">Enter manually</a></div></section>
     ${pulse(feed)}${expertsNote(feed)}${sec("Best plays this week", `<div class="list">${ids.map((id) => prow(id, C)).join("")}</div>`)}`;
+}
+
+function srcPanel(L, C) {
+  const head = `<div style="margin:4px 0 14px"><div class="small muted" style="margin-bottom:6px">Projections from</div>${srcBar()}</div>`;
+  if (S.ui.src === "blend") return head;
+  const posOf = (id) => S.players[id]?.p, by = (P) => (id) => P.proj[id]?.mean || 0;
+  const a = optimal(L.roster, L.slots, by(C.P), posOf), b = optimal(L.roster, L.slots, by(C.P0), posOf);
+  const diff = a.starters.map((s, i) => [s, b.starters[i]]).filter(([x, y]) => x.id !== y.id && x.id && y.id), miss = L.roster.filter((id) => C.P.proj[id]?.srcMissing && C.P0.proj[id]?.mean > 0).length;
+  const nm = (id) => S.players[id]?.n || id;
+  return head + `<div class="panel small" style="margin-bottom:14px">${diff.length ? `<b>${diff.length} ${diff.length === 1 ? "starter differs" : "starters differ"} from the Blended lineup.</b> ${diff.map(([x, y]) => `${x.slot}: ${nm(x.id)} instead of ${nm(y.id)}`).join("; ")}.` : "Same starters as the Blended lineup."}${miss ? ` ${miss} of your players have no ${SOURCES[S.ui.src]} number, so they keep the Blended one.` : ""}</div>`;
 }

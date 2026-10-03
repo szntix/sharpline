@@ -1,6 +1,6 @@
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
+import { SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -199,6 +199,7 @@ $app.addEventListener("click", async (e) => {
     case "edit-league": S.ui.editing = S.ui.editing === id ? null : id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId(S.ui.editing ? "league-editor" : "leagues-list"); break;
     case "edit-roster": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId("league-roster"); break;
     case "jump": scrollToId(v); break;
+    case "src": S.ui.src = SOURCES[v] ? v : "blend"; try { localStorage.setItem("sharpline.src", S.ui.src); } catch {} render(); break;
     case "edit-teams": S.ui.editing = id; if (S.route.name !== "leagues") location.hash = "leagues"; else render(); scrollToId("league-teams"); break;
     case "edit-close": S.ui.editing = null; render(); scrollToId("leagues-list"); break;
     case "league-rm": if (confirm("Delete this league? This can't be undone.")) { S.profile.leagues = S.profile.leagues.filter((l) => l.id !== id); if (S.profile.active === id) S.profile.active = S.profile.leagues[0]?.id || null; S.ui.editing = null; commit("League deleted"); } break;

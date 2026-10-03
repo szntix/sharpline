@@ -8,7 +8,7 @@ import { buildProjections, rosValues, replacement, waiverLevel } from "./engine.
 export const S = {
   user: null, profile: null, players: null, feed: null, usage: null, outlook: null, acc: null, trending: {},
   week: null, activeWeek: null, errors: {}, loading: true, saveState: "saved", route: { name: "week", args: [] },
-  ui: { trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
+  ui: { src: (() => { try { return localStorage.getItem("sharpline.src") || "blend"; } catch { return "blend"; } })(), trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
 };
 export let render = () => {};
 export const setRender = (fn) => { render = fn; };
@@ -36,12 +36,21 @@ function rankTables(P, feed) {
   }
   return { ours, exp };
 }
+// Which numbers drive the app. Blended is the tested default; the others swap in that source's own number (in your scoring) wherever it has one.
+export const SOURCES = { blend: "Blended", model: "Our model", experts: "Experts", sleeper: "Sleeper" };
+function withSource(P, src) {
+  if (!src || src === "blend") return P;
+  const proj = {};
+  for (const [id, x] of Object.entries(P.proj)) { const raw = src === "model" ? x.model : src === "experts" ? x.experts : x.sleeper, scale = x.ppr > 0 ? x.mean / x.ppr : null;
+    proj[id] = raw != null && scale != null ? { ...x, mean: raw * scale, srcMissing: false } : { ...x, srcMissing: true }; }
+  return { ...P, proj };
+}
 export function computed(L = leagueOrDefault()) {
   if (!S.players || !S.feed) return null;
-  const key = JSON.stringify([L, S.feed.fetchedAt, S.feed.week, S.usage?.asOf, !!S.outlook, S.acc?.sleeperShare]);
+  const key = JSON.stringify([L, S.ui.src, S.feed.fetchedAt, S.feed.week, S.usage?.asOf, !!S.outlook, S.acc?.sleeperShare]);
   if (memo.key === key) return memo.v;
-  const c = ctx(), P = buildProjections(c, L), R = rosValues(c, L, P), repl = waiverLevel(c, L, R, replacement(c, L, R));
-  memo.key = key; memo.v = { c, P, R, repl, ranks: rankTables(P, S.feed), cache: {}, L };
+  const c = ctx(), P0 = buildProjections(c, L), P = withSource(P0, S.ui.src), R = rosValues(c, L, P), repl = waiverLevel(c, L, R, replacement(c, L, R));
+  memo.key = key; memo.v = { c, P, P0, R, repl, ranks: rankTables(P, S.feed), cache: {}, L };
   return memo.v;
 }
 

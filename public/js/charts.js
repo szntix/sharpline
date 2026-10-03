@@ -176,7 +176,10 @@ export function mirrorRows(rows, { ta = "", tb = "" } = {}) {
       better = Math.abs(r.a - r.b) < tol ? "tie" : (r.lowerBetter ? r.a < r.b : r.a > r.b) ? "a" : "b";
     }
     const win = (s) => better === s || better === "tie", fa = okA ? (r.fa ?? f1(r.a)) : "–", fb = okB ? (r.fb ?? f1(r.b)) : "–";
-    const bar = (s, w) => `<div class="mb ${s}${win(s) ? " win" : ""}">${both ? `<i style="width:${Math.max(4, w * 100).toFixed(1)}%"></i>` : ""}</div>`;
+    // With a reference scale, a bar's length is the value against the week's best at the position, not just against the other player.
+    if (r.max != null && both) { const sc = (v) => Math.max(0.03, Math.min(1, r.lowerBetter ? (r.n - v + 1) / r.n : (v - (r.min ?? 0)) / ((r.max - (r.min ?? 0)) || 1))); wa = sc(r.a); wb = sc(r.b); }
+    const tick = (s) => (r.max != null && r.ref != null && both ? `<b class="ref" style="${s === "a" ? "right" : "left"}:${(100 * Math.max(0, Math.min(1, r.lowerBetter ? (r.n - r.ref + 1) / r.n : (r.ref - (r.min ?? 0)) / ((r.max - (r.min ?? 0)) || 1)))).toFixed(1)}%"></b>` : "");
+    const bar = (s, w) => `<div class="mb ${s}${win(s) ? " win" : ""}">${both ? `<i style="width:${Math.max(3, w * 100).toFixed(1)}%"></i>${tick(s)}` : ""}</div>`;
     return `<div class="mr"><div class="mv a${win("a") ? " win" : ""}">${fa}</div>${bar("a", wa)}<div class="ml">${r.label}</div>${bar("b", wb)}<div class="mv b${win("b") ? " win" : ""}">${fb}</div></div>`;
   }).join("")}</div>`;
 }

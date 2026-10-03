@@ -124,10 +124,22 @@ export function viewPlayer(id) {
     if (d) matchupSec = sec("The matchup", `<p>${esc(pr.opp)} has allowed <b>${d.v >= 0 ? f0(d.v * 100) + "% more" : f0(-d.v * 100) + "% fewer"}</b> fantasy points to ${posLabel(pos)}s than the average defense, recently weighted. That is ${d.p >= 50 ? "friendlier" : "tougher"} than ${d.p >= 50 ? d.p : 100 - d.p}% of the league.</p>
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
-  return feedError() + hero + likely + built + stands + form + experts + matchupSec + notesSection(id, C);
+  return feedError() + hero + likely + advSection(id, p) + built + stands + form + experts + matchupSec + notesSection(id, C);
 }
 
 function notesSection(id, C) {
   const s = signals(id, C.c, C.P);
   return s.length ? sec("Worth knowing", noteList(s.map((x) => ({ t: x.t === "info" ? "" : x.t, s: x.s })))) : "";
+}
+
+// This season's efficiency from the nflverse weekly file, each against everyone at the position with at least two games.
+function advSection(id, p) {
+  const adv = S.usage?.players?.[id]?.adv; if (!adv || !adv.g || !["QB", "RB", "WR", "TE"].includes(p.p)) return "";
+  const peers = Object.values(S.usage.players).filter((x) => x.p === p.p && x.adv && x.adv.g >= 2);
+  const ep = (v) => (v >= 0 ? "+" : "") + v.toFixed(2), pc = (v) => Math.round(v * 100) + "%", n1 = (v) => v.toFixed(1), n2 = (v) => v.toFixed(2);
+  const rec = [["wopr", "WOPR (target and air yards share)", n2], ["ays", "Air yards share", pc], ["adot", "Average depth of target", n1], ["yac", "Yards after catch per catch", n1], ["recEpa", "EPA per target", ep], ["catchRate", "Catch rate", pc]];
+  const F = { QB: [["epaDb", "EPA per dropback", ep], ["cpoe", "Completion % over expected", (v) => (v >= 0 ? "+" : "") + v.toFixed(1)], ["rushEpa", "EPA per carry", ep], ["fd", "First downs a game", n1]], RB: [["rushEpa", "EPA per carry", ep], ["recEpa", "EPA per target", ep], ["fd", "First downs a game", n1], ["catchRate", "Catch rate", pc]], WR: rec, TE: rec }[p.p];
+  const tiles = F.filter(([k]) => adv[k] != null).map(([k, label, fmt]) => { const vals = peers.map((x) => x.adv[k]).filter((v) => v != null); const pct = vals.length >= 10 ? Math.round((100 * vals.filter((v) => v < adv[k]).length) / vals.length) : null;
+    return `<div><span class="num">${fmt(adv[k])}</span><small>${esc(label)}${pct != null ? `<br>better than ${pct}% of ${posLabel(p.p)}s` : ""}</small></div>`; }).join("");
+  return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px">This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}. EPA is expected points added per play, from nflverse. Early in the season these move a lot.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
 }

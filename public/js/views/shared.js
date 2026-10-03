@@ -1,4 +1,4 @@
-import { S, pl, league, computed } from "../state.js";
+import { SOURCES, S, pl, league, computed } from "../state.js";
 import { signals } from "../engine.js";
 import { esc, f1, ago, agoShort, kickoffText, posLabel, statusChip, posClass, plate, teamStripe } from "../ui.js";
 import { SLOT_LABEL } from "../scoring.js";
@@ -74,3 +74,6 @@ export function syncLine(L, style = "") {
     : S.ui.syncErr ? `<span>Couldn't reach Sleeper just now. Showing rosters from ${esc(t ? ago(t) : "when you imported")}.</span>` : `<span>Rosters from Sleeper, checked ${esc(when)}.</span>`;
   return `<div class="syncline" role="status" ${style ? `style="${style}"` : ""}>${text}${busy ? "" : `<button class="link" data-act="resync-now">Refresh</button>`}</div>`;
 }
+
+// The projection source switch: the same control wherever it appears.
+export const srcBar = () => `<div class="seg" role="group" aria-label="Projections from">${Object.entries(SOURCES).map(([k, l]) => `<button data-act="src" data-v="${k}" aria-pressed="${S.ui.src === k}">${l}</button>`).join("")}</div>`;

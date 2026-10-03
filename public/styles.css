@@ -438,3 +438,5 @@ details > summary { cursor: pointer; }
 .jump { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; margin: 4px 0 14px; } .jump .btn { margin-left: auto; }
 .chip button { position: relative; } .chip button::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
 .panel details > summary { padding: 11px 0; cursor: pointer; }
+.mb .ref { position: absolute; top: 0; bottom: 0; width: 2px; margin: 0 -1px; background: var(--ink2); opacity: .75; }
+.dvp { border-collapse: collapse; width: 100%; font-size: 14px; } .dvp th, .dvp td { padding: 10px 8px; text-align: right; border-bottom: 1px solid var(--hair); } .dvp th:first-child { text-align: left; } .dvp thead th { color: var(--ink2); font-weight: 600; font-size: 13px; }
