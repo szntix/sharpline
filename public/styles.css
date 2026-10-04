@@ -477,3 +477,13 @@ select:focus-visible, input:focus-visible { outline: 2px solid var(--link); outl
 .mm { display: inline-flex; align-items: flex-end; gap: 2px; height: 13px; margin-top: 5px; } .mm i { width: 4px; border-radius: 1px; background: var(--hair2); } .mm i:nth-child(1) { height: 5px; } .mm i:nth-child(2) { height: 7px; } .mm i:nth-child(3) { height: 9px; } .mm i:nth-child(4) { height: 11px; } .mm i:nth-child(5) { height: 13px; } .mm i.on { background: var(--ti); }
 .proj .mm { display: flex; justify-content: flex-end; margin-left: auto; }
 .matchline { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; font-size: 14px; color: var(--ink2); } .matchline .mm { margin: 0; flex: none; } .matchline b { color: var(--ti); }
+.stat3 > a.tile { background: var(--paper); border-radius: 14px; padding: 12px; border: 1px solid var(--hair); box-shadow: var(--lift-sm); }
+
+.stat3 > a.tile { position: relative; display: block; color: inherit; text-decoration: none; } .tile .chev { position: absolute; top: 6px; right: 9px; color: var(--ink2); font-size: 18px; line-height: 1; }
+a.tile:focus-visible, .statrow:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.statlist { border: 1px solid var(--hair); border-radius: var(--r); background: var(--paper); overflow: hidden; }
+.statrow { display: grid; grid-template-columns: 40px 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 58px; padding: 6px 14px; color: inherit; text-decoration: none; border-bottom: 1px solid var(--hair); content-visibility: auto; contain-intrinsic-size: 58px; }
+.statrow:last-child { border-bottom: 0; } .statrow .rk { font: 800 17px/1 var(--font); font-stretch: 80%; color: var(--ink2); text-align: right; } .statrow .who { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .statrow .who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .statrow .who small { color: var(--ink2); font-size: 12.5px; }
+.statrow .val { font: 800 20px/1 var(--font); font-stretch: 80%; color: var(--ti); } .statrow.me { background: color-mix(in srgb, var(--tf) 16%, transparent); box-shadow: inset 3px 0 0 var(--ti); } .statrow.me .rk { color: var(--ink); }
+.statme { margin: 10px 0 0; border-left: 3px solid var(--ti); } .statme b { color: var(--ti); }
+.mvchip { display: inline-flex; align-items: center; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 13px; line-height: 20px; background: color-mix(in srgb, var(--tf) 18%, transparent); } .mv-up { --tf: var(--up); } .mv-down { --tf: var(--down); } .nw { white-space: nowrap; }

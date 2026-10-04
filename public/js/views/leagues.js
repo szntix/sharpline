@@ -3,7 +3,7 @@ import { sleeperApi } from "../api.js";
 import { TYPE_HELP, SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
 import { VERSION, BUILT } from "../version.js";
 import { esc, uid, toast, ago } from "../ui.js";
-import { SRC_HELP, srcBar, sec } from "./shared.js";
+import { fold, SRC_HELP, srcBar, sec } from "./shared.js";
 
 export function newLeague(name = "My league") {
   return { id: uid(), name, type: "redraft", teams: 12, scoringPreset: "ppr", scoring: { ...SCORING_PRESETS.ppr.s }, rosterPreset: "standard", slots: [...ROSTER_PRESETS.standard.slots], bench: ROSTER_PRESETS.standard.bench,
@@ -18,8 +18,10 @@ const themeNow = () => localStorage.getItem("sharpline.theme") || "auto";
 
 export function viewLeagues() {
   const L = S.profile.leagues.find((l) => l.id === S.ui.editing) || null;
-  const list = S.profile.leagues.map((l) => `<div class="row slotted"><span class="pos neu">${l.sleeper ? "SL" : "MAN"}</span><div class="who"><span class="name">${esc(l.name)}${S.profile.active === l.id ? ` <span class="pos" style="--f:var(--brand);color:var(--brand-ink)">ACTIVE</span>` : ""}</span><span class="meta">${LEAGUE_TYPES[l.type]}, ${l.teams} teams, ${esc(SCORING_PRESETS[l.scoringPreset]?.label || "Custom scoring")}, ${l.roster.length} players</span></div>
-    <div class="act">${S.profile.active !== l.id ? `<button class="btn sm" data-act="use-league" data-id="${l.id}">Use</button>` : ""}${l.sleeper ? `<button class="btn sm" data-act="sync-league" data-id="${l.id}" ${S.ui.syncing ? "disabled" : ""}>Refresh rosters</button>` : ""}${l.sleeper ? "" : `<button class="btn sm" data-act="edit-roster" data-id="${l.id}">Edit roster</button>`}<button class="btn sm" data-act="edit-league" data-id="${l.id}" aria-expanded="${S.ui.editing === l.id}">${S.ui.editing === l.id ? "Close" : "Edit"}</button>${l.sleeper ? `<span class="muted small" style="align-self:center">Rosters ${l.sleeper.syncedAt ? "checked " + ago(l.sleeper.syncedAt) : "from import"}</span>` : ""}</div></div>`).join("");
+  const rowOf = (l) => `<div class="row slotted"><span class="pos neu">${l.sleeper ? "SL" : "MAN"}</span><div class="who"><span class="name">${esc(l.name)}${S.profile.active === l.id ? ` <span class="pos" style="--f:var(--brand);color:var(--brand-ink)">ACTIVE</span>` : ""}</span><span class="meta">${LEAGUE_TYPES[l.type]}, ${l.teams} teams, ${esc(SCORING_PRESETS[l.scoringPreset]?.label || "Custom scoring")}, ${l.roster.length} players</span></div>
+    <div class="act">${S.profile.active !== l.id ? `<button class="btn sm" data-act="use-league" data-id="${l.id}">Use</button>` : ""}${l.sleeper ? `<button class="btn sm" data-act="sync-league" data-id="${l.id}" ${S.ui.syncing ? "disabled" : ""}>Refresh rosters</button>` : ""}${l.sleeper ? "" : `<button class="btn sm" data-act="edit-roster" data-id="${l.id}">Edit roster</button>`}<button class="btn sm" data-act="edit-league" data-id="${l.id}" aria-expanded="${S.ui.editing === l.id}">${S.ui.editing === l.id ? "Close" : "Edit"}</button>${l.sleeper ? `<span class="muted small" style="align-self:center">Rosters ${l.sleeper.syncedAt ? "checked " + ago(l.sleeper.syncedAt) : "from import"}</span>` : ""}</div></div>`;
+  const actL = S.profile.leagues.find((x) => x.id === S.profile.active) || S.profile.leagues[0], others = S.profile.leagues.filter((x) => x !== actL);
+  const list = (actL ? rowOf(actL) : "") + (others.length ? fold("otherleagues", `Other leagues`, `<div class="list">${others.map(rowOf).join("")}</div>`, { badge: others.length }) : "");
   return `<h1 class="h1" style="margin-top:8px">Leagues</h1>
     ${sec("Your leagues", `<span id="leagues-list" tabindex="-1"></span><div class="list">${list || `<p class="muted" style="padding:14px 0">No leagues yet.</p>`}</div><div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="new-league">New league</button><button class="btn" data-act="imp-start">Import from Sleeper</button></div>`)}
     ${S.ui.imp ? viewImport() : ""}${L ? viewEditLeague(L) : ""}${viewAccount()}`;

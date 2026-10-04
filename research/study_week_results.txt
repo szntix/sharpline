@@ -1,0 +1,39 @@
+######## WEEK-OF-SEASON STUDY ########
+
+QB  (2392 player-weeks)   share of the blend the model should get, by week of the season (90% interval)
+   weeks   n     model MSE  experts MSE  fixed-blend MSE   best model share [interval]
+    1-3     302       61.9        58.1           56.8        24%  [2%, 50%]
+    4-6     460       57.8        54.2           53.7        28%  [8%, 50%]
+    7-10    560       60.5        57.7           57.2        30%  [9%, 54%]
+   11-14    599       61.3        56.7           56.7        15%  [-4%, 38%]
+   15-18    471       64.0        59.9           59.4        30%  [8%, 50%]
+   honest test (each season scored with weights fitted WITHOUT it): fixed 56.79 | hard buckets 57.45 (-1.17%, better in 1/6 seasons) | smooth drift 56.86 (-0.12%, better in 2/6 seasons)
+
+RB  (4414 player-weeks)   share of the blend the model should get, by week of the season (90% interval)
+   weeks   n     model MSE  experts MSE  fixed-blend MSE   best model share [interval]
+    1-3     493       48.2        41.7           42.2        12%  [-7%, 19%]
+    4-6     837       53.3        51.0           50.4        36%  [19%, 49%]
+    7-10   1112       48.7        46.2           45.8        29%  [14%, 44%]
+   11-14   1089       48.7        46.3           46.0        27%  [14%, 40%]
+   15-18    883       51.6        50.7           49.8        42%  [26%, 60%]
+   honest test (each season scored with weights fitted WITHOUT it): fixed 47.10 | hard buckets 47.25 (-0.32%, better in 0/6 seasons) | smooth drift 47.10 (+0.01%, better in 3/6 seasons)
+
+WR  (7035 player-weeks)   share of the blend the model should get, by week of the season (90% interval)
+   weeks   n     model MSE  experts MSE  fixed-blend MSE   best model share [interval]
+    1-3     813       52.8        50.3           50.1        22%  [9%, 32%]
+    4-6    1328       49.4        46.3           46.4         5%  [-12%, 19%]
+    7-10   1716       44.9        43.5           43.3        18%  [2%, 34%]
+   11-14   1766       46.9        44.6           44.8         5%  [-10%, 19%]
+   15-18   1412       50.4        49.4           49.3        29%  [11%, 52%]
+   honest test (each season scored with weights fitted WITHOUT it): fixed 46.25 | hard buckets 46.26 (-0.04%, better in 2/6 seasons) | smooth drift 46.30 (-0.11%, better in 3/6 seasons)
+
+TE  (2715 player-weeks)   share of the blend the model should get, by week of the season (90% interval)
+   weeks   n     model MSE  experts MSE  fixed-blend MSE   best model share [interval]
+    1-3     330       34.5        34.2           33.6        36%  [15%, 83%]
+    4-6     510       38.8        38.1           37.6        45%  [27%, 63%]
+    7-10    678       39.3        37.4           37.6        16%  [-19%, 47%]
+   11-14    663       38.2        38.3           37.8        49%  [28%, 71%]
+   15-18    534       39.5        38.4           38.2        30%  [-1%, 61%]
+   honest test (each season scored with weights fitted WITHOUT it): fixed 37.27 | hard buckets 37.52 (-0.67%, better in 0/6 seasons) | smooth drift 37.32 (-0.13%, better in 1/6 seasons)
+
+ALL POSITIONS (weighted): fixed 46.53 | hard buckets 46.71 (-0.396%) | smooth drift 46.56 (-0.081%)

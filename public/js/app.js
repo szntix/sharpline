@@ -11,6 +11,7 @@ import { viewSlate, viewGame } from "./views/slate.js";
 import { viewPlayers } from "./views/players.js";
 import { viewPlayer } from "./views/player.js";
 import { viewCompare } from "./views/compare.js";
+import { viewStat } from "./views/stat.js";
 import { viewMoves } from "./views/moves.js";
 import { viewProof } from "./views/proof.js";
 import { viewLeagues, newLeague, impFind, impLeague, impTeam, resync, syncRosters, ensureRosters } from "./views/leagues.js";
@@ -46,11 +47,11 @@ const ICON = {
   prev: I('<path d="M14.5 6l-6 6 6 6"/>'), next: I('<path d="M9.5 6l6 6-6 6"/>'),
 };
 const TABS = [["week", "Week"], ["slate", "Slate"], ["players", "Players"], ["moves", "Moves"], ["proof", "Proof"]];
-const TAB_OF = { week: "week", slate: "slate", game: "slate", players: "players", player: "players", compare: "players", moves: "moves", proof: "proof" };
+const TAB_OF = { week: "week", slate: "slate", game: "slate", players: "players", player: "players", compare: "players", stat: "players", moves: "moves", proof: "proof" };
 
 function parseRoute() {
   const [name = "week", ...args] = (location.hash.slice(1) || "week").split("/");
-  return { name: ["week", "slate", "game", "players", "player", "compare", "moves", "proof", "leagues"].includes(name) ? name : "week", args };
+  return { name: ["week", "slate", "game", "players", "player", "compare", "stat", "moves", "proof", "leagues"].includes(name) ? name : "week", args };
 }
 
 function render() {
@@ -60,7 +61,7 @@ function render() {
   const { name, args } = S.route;
   let body = "";
   try {
-    body = { week: viewWeek, slate: viewSlate, game: () => viewGame(args[0]), players: viewPlayers, player: () => viewPlayer(args[0]), compare: () => viewCompare(args[0], args[1]), moves: viewMoves, proof: viewProof, leagues: viewLeagues }[name]();
+    body = { week: viewWeek, slate: viewSlate, game: () => viewGame(args[0]), players: viewPlayers, player: () => viewPlayer(args[0]), compare: () => viewCompare(args[0], args[1]), stat: () => viewStat(args[0], args[1], args[2]), moves: viewMoves, proof: viewProof, leagues: viewLeagues }[name]();
   } catch (e) { console.error(e); body = `<div class="panel empty"><h2 class="h2">Something went wrong on this screen</h2><p class="muted small" style="margin:6px 0 14px">${esc(e.message)}<br>Version ${VERSION}</p><a class="btn primary" href="#week">Back to the week</a></div>`; }
   const wk = S.feed?.week ?? S.week, atNow = S.activeWeek == null || wk === S.activeWeek;
   $app.innerHTML = `<header class="top"><a class="brand" href="#week" aria-label="Sharpline home">${LOGO}<span>Sharpline</span></a>
@@ -193,6 +194,7 @@ $app.addEventListener("click", async (e) => {
     case "cmp-go": { const [x, y] = S.ui.pick; S.ui.pick = []; location.hash = `compare/${x}/${y}`; break; }
     case "cmp-clear": S.ui.pick = []; render(); break;
     case "moves-tab": S.ui.moves = v; render(); break;
+    case "st-filter": S.ui.plFilter = v; render(); break;
     case "proof-pos": S.ui.proofPos = v; render(); break;
     case "theme": localStorage.setItem("sharpline.theme", v); applyTheme(); render(); break;
     case "tint": try { localStorage.setItem("sharpline.tint", v === "on" ? "on" : "off"); } catch {} applyTheme(); render(); break;

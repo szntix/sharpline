@@ -112,15 +112,18 @@ export async function sleeperProj(season, week) {
 // ---------------------------------------------------------------------------------------------
 // Official injury reports (nflverse republishes them through the week)
 // ---------------------------------------------------------------------------------------------
+// Both injury areas, such as "Knee, Hamstring", from the game report or else the practice report. Missing or repeated parts are dropped.
+const tx = (v) => (v == null ? null : na(v));
+export const injuryText = (a, b) => [...new Set([tx(a), tx(b)].filter(Boolean))].join(", ") || null;
 export async function loadInjuries(season, week) {
-  const all = await cached(`inj4-${season}`, 30 * 60e3, async () => {
+  const all = await cached(`inj5-${season}`, 30 * 60e3, async () => {
     const csv = await getText(`${NFLV}/injuries/injuries_${season}.csv`);
     const players = await loadPlayers(); const g2s = await gsisToSleeper(players);
     const byWeek = {}, rows = parseCsv(csv), shape = checkInjuries(Object.keys(rows[0] || {}));
     for (const r of rows) {
       const sid = g2s[r.gsis_id]; if (!sid || !["QB", "RB", "WR", "TE", "K"].includes(r.position)) continue;
       const practice = /Did Not/.test(r.practice_status) ? "DNP" : /Limited/.test(r.practice_status) ? "Limited" : /Full/.test(r.practice_status) ? "Full" : null;
-      (byWeek[r.week] ||= {})[sid] = { s: na(r.report_status), p: practice, i: na(r.report_primary_injury) || na(r.practice_primary_injury) };
+      (byWeek[r.week] ||= {})[sid] = { s: na(r.report_status), p: practice, i: injuryText(r.report_primary_injury, r.report_secondary_injury) || injuryText(r.practice_primary_injury, r.practice_secondary_injury) };
     }
     return { fetchedAt: Date.now(), byWeek, shape };
   });

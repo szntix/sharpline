@@ -1,3 +1,4 @@
+import { ADV, ADV_BY_POS, peerList, gradeOf } from "./advstats.js";
 import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
@@ -76,13 +77,14 @@ export function viewPlayer(id) {
     for (const k of ["env", "usage", "dvp", "wind", "home"]) if (kept.includes(k)) rows.push({ kind: "delta", label: lab[k], note: k === "usage" ? "targets, carries and target share" : "", v: pr.parts[k] || 0 });
     rows.push({ kind: "end", label: "Our stat model says", v: pr.model });
     const w = pr.weights;
+    const blendPPR = C.P0.proj[id]?.ppr ?? pr.ppr;   // always the true Blend, whichever source is selected
     built = sec("How we got the number", `${waterfall(rows)}
       ${pr.experts != null || pr.sleeper != null ? `<div class="bars3" style="margin-top:18px">
         <div class="b3"><span>Our stat model</span><div class="t"><i class="m" style="width:${(pr.model / Math.max(pr.model, pr.experts || 0, pr.sleeper || 0, 1)) * 100}%"></i></div><b>${f1(pr.model)}</b></div>
         ${pr.experts != null ? `<div class="b3"><span>Experts</span><div class="t"><i class="e" style="width:${(pr.experts / Math.max(pr.model, pr.experts, pr.sleeper || 0, 1)) * 100}%"></i></div><b>${f1(pr.experts)}</b></div>` : ""}
         ${pr.sleeper != null ? `<div class="b3"><span>Sleeper</span><div class="t"><i class="e" style="width:${(pr.sleeper / Math.max(pr.model, pr.experts || 0, pr.sleeper, 1)) * 100}%;opacity:.6"></i></div><b>${f1(pr.sleeper)}</b></div>` : ""}
-        <div class="b3"><span><b style="text-align:left">Blend</b></span><div class="t"><i class="bl" style="width:${(pr.ppr / Math.max(pr.model, pr.experts || 0, pr.sleeper || 0, pr.ppr, 1)) * 100}%"></i></div><b>${f1(pr.ppr)}</b></div></div>
-        <p class="small muted" style="margin-top:10px">${pr.kind === "blend" ? `Blend is ${Math.round(w.experts * 100)}% expert consensus and ${Math.round(w.model * 100)}% our stat model. Those weights came from testing ${posLabel(pos)}s over five seasons: experts were more accurate than any stats-only model, and adding the model to them helped a little more.` : `Only ${SRC_NOTE[pr.kind] || pr.kind} was available for this player.`} Numbers are standard PPR.</p>` : ""}`);
+        <div class="b3"><span><b style="text-align:left">Blend</b></span><div class="t"><i class="bl" style="width:${(blendPPR / Math.max(pr.model, pr.experts || 0, pr.sleeper || 0, blendPPR, 1)) * 100}%"></i></div><b>${f1(blendPPR)}</b></div></div>
+        <p class="small muted" style="margin-top:10px">${pr.kind === "blend" ? `Blend is ${Math.round(w.experts * 100)}% expert consensus and ${Math.round(w.model * 100)}% our stat model. Those weights came from testing ${posLabel(pos)}s over five seasons: experts were more accurate than any stats-only model, and adding the model to them kept the blend at least as accurate.` : `Only ${SRC_NOTE[pr.kind] || pr.kind} was available for this player.`} Numbers are standard PPR.</p>` : ""}`);
   } else {
     built = sec("Where the number comes from", `<p>${modelWhy(id, p, pr)}</p>`);
   }
@@ -134,22 +136,14 @@ function notesSection(id, C) {
   return s.length ? sec("Worth knowing", noteList(s.map((x) => ({ t: x.t === "info" ? "" : x.t, s: x.s })))) : "";
 }
 
-// This season's efficiency from the nflverse weekly file. Each stat is ranked against everyone at the position with two or more games, and the tile says
-// in words and color whether it is good: a meter filled to his percentile, a one-word grade, and the number in the grade's color.
+// This season's efficiency from the nflverse weekly file. Each stat is ranked against everyone at the position with two or more games, and the tile says in
+// words and color whether it is good: a meter filled to his percentile, a one-word grade, and the number in the grade's color. Tapping a tile opens the rankings.
 function advSection(id, p) {
-  const adv = S.usage?.players?.[id]?.adv; if (!adv || !adv.g || !["QB", "RB", "WR", "TE"].includes(p.p)) return "";
-  const peers = Object.values(S.usage.players).filter((x) => x.p === p.p && x.adv && x.adv.g >= 2);
-  const ep = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2), pc = (v) => Math.round(v * 100) + "%", n1 = (v) => v.toFixed(1), n2 = (v) => v.toFixed(2), cp = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
-  const rec = [["wopr", "WOPR (target and air yards share)", n2], ["ays", "Air yards share", pc], ["adot", "Depth of target", n1, "style"], ["yac", "Yards after catch", n1], ["recEpa", "EPA per target", ep, "signed"], ["catchRate", "Catch rate", pc]];
-  const F = { QB: [["epaDb", "EPA per dropback", ep, "signed"], ["cpoe", "Completion % over expected", cp, "signed"], ["rushEpa", "EPA per carry", ep, "signed"], ["fd", "First downs a game", n1]], RB: [["rushEpa", "EPA per carry", ep, "signed"], ["recEpa", "EPA per target", ep, "signed"], ["fd", "First downs a game", n1], ["catchRate", "Catch rate", pc]], WR: rec, TE: rec }[p.p];
-  const TIER = [[85, "Elite", "g2"], [65, "Strong", "g1"], [35, "Average", "n"], [15, "Weak", "b1"], [0, "Poor", "b2"]];
-  const tiles = F.filter(([k]) => adv[k] != null).map(([k, label, fmt, kind]) => { const vals = peers.map((x) => x.adv[k]).filter((v) => v != null), v = adv[k];
-    const pct = vals.length >= 10 ? Math.round((100 * vals.filter((x) => x < v).length) / vals.length) : null; let word = "", tone = "n";
-    if (pct != null) { const t = TIER.find(([c]) => pct >= c); word = t[1]; tone = t[2]; if (kind === "style") { word = pct >= 65 ? "Deep" : pct <= 35 ? "Short" : "Mixed"; tone = "n"; }
-      if (kind === "signed") { if (v < 0 && (tone === "g1" || tone === "g2")) tone = "n"; if (v > 0 && (tone === "b1" || tone === "b2")) tone = "n"; } }
-    const aria = pct != null ? `${word}: better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet";
-    return `<div class="tile tone-${tone}" data-tone="${tone}"><span class="num">${fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(aria)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(label)}<br>${pct != null ? `<b>${word}</b> · better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet"}</small></div>`; }).join("");
-  return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Green is better than most ${posLabel(p.p)}s, <span class="key tone-n"></span>gray is about average, <span class="key tone-b2"></span>red is worse. This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}; early on these move a lot. EPA is expected points added per play, from nflverse.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
+  const adv = S.usage?.players?.[id]?.adv; if (!adv || !adv.g || !ADV_BY_POS[p.p]) return "";
+  const tiles = ADV_BY_POS[p.p].filter((k) => adv[k] != null).map((k) => { const m = ADV[k], v = adv[k], vals = peerList(S.usage, p.p, k).map((x) => x.v), { pct, word, tone } = gradeOf(v, vals, m.kind);
+    const aria = `${m.label}: ${m.fmt(v)}. ${pct != null ? `${word}, better than ${pct}% of ${posLabel(p.p)}s.` : "Not enough players to rank yet."} Open the ${posLabel(p.p)} rankings.`;
+    return `<a class="tile tone-${tone}" data-tone="${tone}" href="#stat/${p.p}/${k}/${id}" aria-label="${esc(aria)}"><span class="chev" aria-hidden="true">›</span><span class="num">${m.fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(`${word}: better than ${pct}% of ${posLabel(p.p)}s`)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(m.label)}<br>${pct != null ? `<b>${word}</b> · better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet"}</small></a>`; }).join("");
+  return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Green is better than most ${posLabel(p.p)}s, <span class="key tone-n"></span>gray is about average, <span class="key tone-b2"></span>red is worse. Tap a stat to see where he ranks. This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}; early on these move a lot. EPA is expected points added per play, from nflverse.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
 }
 
 // The matchup in words, with the same meter as the lineup rows.

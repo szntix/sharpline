@@ -16,7 +16,8 @@ function wxLine(g) {
 function moveText(l) {
   if (!l || l.totalOpen == null) return "";
   const d = l.total - l.totalOpen;
-  return Math.abs(d) >= 1.5 ? `<span class="${d < 0 ? "mv-down" : "mv-up"}">total ${d < 0 ? "down" : "up"} ${Math.abs(d)} since open</span>` : "";
+  const a = Math.abs(d), amt = Number.isInteger(a) ? a : +a.toFixed(1);
+  return a >= 1.5 ? `<span class="mvchip ${d < 0 ? "mv-down" : "mv-up"}" role="img" aria-label="total ${d < 0 ? "down" : "up"} ${amt} points since the line opened"><span aria-hidden="true">${d < 0 ? "▼" : "▲"}${amt}</span></span>` : "";
 }
 
 export function gameRow(g) {
@@ -28,7 +29,7 @@ export function gameRow(g) {
     <div class="tug"><div class="tm">${plate(g.away)}<span>${esc(g.away)}<small>${c ? f1(c.a) : ""}</small></span></div>
       <div class="tugbar" aria-hidden="true">${c ? `<div class="tb-in"><i style="width:${(c.a / (c.a + c.h)) * 100}%;background:${sa}"></i><i style="width:${(c.h / (c.a + c.h)) * 100}%;background:${sh}"></i></div>` : ""}</div>
       <div class="tm r"><span>${esc(g.home)}<small>${c ? f1(c.h) : ""}</small></span>${plate(g.home)}</div></div>
-    <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span>${esc(spr)}, total ${g.line.total}</span>${moveText(g.line)}` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
+    <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span class="nw">${esc(spr)}, total ${g.line.total}${moveText(g.line)}</span>` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
 }
 
 export function viewSlate() {
@@ -36,7 +37,7 @@ export function viewSlate() {
   const games = S.feed.games, priced = games.filter((g) => g.line).length;
   const ranked = [...games].sort((a, b) => (b.line ? b.line.total : -1) - (a.line ? a.line.total : -1));
   return `${feedError()}<h1 class="h1" style="margin-top:8px">Week ${S.feed.week} slate</h1>
-    <p class="lede" style="margin-top:8px">Every game by how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense.</p>
+    <p class="lede" style="margin-top:8px">Every game by how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense. A ▲ or ▼ beside a total shows how far it has moved since the line opened.</p>
     ${pulse(S.feed)}
     <div class="sec" style="margin-top:20px"><div class="list"><div class="band"><span>Ranked by game total</span><span>${priced} of ${games.length} priced</span></div>${ranked.map(gameRow).join("") || `<p class="muted" style="padding:16px">No games found for this week.</p>`}</div>
       <p class="small muted" style="margin-top:8px">Each bar splits the game's expected points between the two teams, in their colors.</p></div>
