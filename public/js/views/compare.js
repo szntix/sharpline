@@ -44,7 +44,7 @@ export function viewCompare(a, b) {
   for (const [k, label, fmt] of XADV) if (xad(a)?.[k] != null && xad(b)?.[k] != null) rows.push({ label, a: xad(a)[k], b: xad(b)[k], fa: fmt(xad(a)[k]), fb: fmt(xad(b)[k]), tol: 0.0005, adv: k });
   if (ea && eb) rows.push({ label: "Expert rank", a: ea, b: eb, fa: posLabel(pa.p) + ea, fb: posLabel(pb.p) + eb, lowerBetter: true });
   const fa = quantile(A, 0.1), fb = quantile(B, 0.1), ca = quantile(A, 0.9), cb = quantile(B, 0.9);
-  const verdict = [`<b>Lean ${esc(short(leader[1].n))}</b>: ${Math.abs(gap).toFixed(1)} points ahead on the projection, and ${f0(leader[3] * 100)} times in 100 he outscores the other.`];
+  const verdict = [`<b>Lean ${esc(short(leader[1].n))}</b>: ${(leader[0] === a ? gap : -gap) >= 0.05 ? `${Math.abs(gap).toFixed(1)} points ahead on the projection, and` : `his projection is ${Math.abs(gap) < 0.05 ? "level" : `${Math.abs(gap).toFixed(1)} points lower`}, but his range is wider on the upside, so`} ${f0(leader[3] * 100)} times in 100 he outscores the other.`];
   if (leader[0] === a ? fa < fb - 1.5 : fb < fa - 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher floor, so he's the safer pick if you're protecting a lead.`);
   if (leader[0] === a ? cb > ca + 1.5 : ca > cb + 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher ceiling, so he's the swing if you need a big game.`);
   // Each bar is measured against this week's best at the position(s) being compared, with a tick for a typical starter (the last starter league-wide).
@@ -60,7 +60,7 @@ export function viewCompare(a, b) {
   }
   return `<a class="link" href="#compare" style="display:inline-block;margin:6px 0">Change players</a>
     <div class="vs-head" style="--ta:${tA.plate};--tai:${tA.plateInk};--tb:${tB.plate};--tbi:${tB.plateInk}"><div class="a">${emblem(pa.t)}<div class="n">${esc(pa.n)}</div><div class="p">${esc(pa.t || "FA")}, ${A.opp ? `${A.game.home === pa.t ? "vs" : "at"} ${esc(A.opp)}` : "no game"}</div><div class="pr">${f1(A.mean)}</div></div>
-      <div class="mid"><div><span class="num">${Math.round(pA * 100)}%</span><small>${esc(short(pa.n))} scores more</small></div></div>
+      <div class="mid"><div><span class="num">${Math.round(leader[3] * 100)}%</span><small>${esc(short(leader[1].n))} scores more</small></div></div>
       <div class="b">${emblem(pb.t)}<div class="n">${esc(pb.n)}</div><div class="p">${esc(pb.t || "FA")}, ${B.opp ? `${B.game.home === pb.t ? "vs" : "at"} ${esc(B.opp)}` : "no game"}</div><div class="pr">${f1(B.mean)}</div></div></div>
     <div class="callout" style="margin-top:14px">${verdict.map((v) => `<p>${v}</p>`).join("")}</div>
     ${sec("If this week were played 20 times", `<p class="small muted" style="margin-bottom:8px">Pick a score, or drag the line on either plot. Filled dots reach it.</p>

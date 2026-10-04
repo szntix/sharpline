@@ -30,6 +30,7 @@ applyTheme();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { applyTheme(); render(); });
 // A team logo that does not load just disappears, leaving the letters underneath.
 $app.addEventListener("error", (e) => { const t = e.target; if (t?.tagName === "IMG" && t.closest(".plate, .emblem")) t.remove(); }, true);
+$app.addEventListener("toggle", (e) => { const d = e.target; if (d?.matches?.("details[data-fold]")) (S.ui.folds ||= {})[d.dataset.fold] = d.open; }, true);
 $app.addEventListener("load", (e) => { const t = e.target; if (t?.tagName === "IMG") t.closest(".plate.mono")?.classList.add("ok"); }, true);
 
 // ---------------------------------------------------------------- icons and shell

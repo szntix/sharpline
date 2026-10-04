@@ -82,3 +82,12 @@ export const srcBar = () => `<div class="seg" role="group" aria-label="Projectio
 // Shown under the header on every screen, only while the numbers are not the tested Blended ones.
 export const srcStrip = () => (S.ui.src === "blend" ? "" : `<div class="srcstrip" role="status"><span>Numbers from <b>${SOURCES[S.ui.src]}</b></span><span class="srcact"><button class="link" data-act="src" data-v="blend">Use Blended</button><a class="link" href="#leagues">Settings</a></span></div>`);
 export const SRC_HELP = { blend: "The tested default: experts and Sleeper blended with our stat model, weighted by position.", model: "Our stat model on its own: recent usage, the betting market, the opponent, weather. Players it cannot rate keep their Blended number.", experts: "The experts' consensus projection, in your scoring.", sleeper: "Sleeper's own projection, in your scoring." };
+
+// Good, neutral or bad at a glance. Five tones (b2 bad, b1 weak, n neutral, g1 good, g2 strong), each with a fill for bars and washes and an ink for text.
+// Color is never the only cue: the same screens also carry words or arrows.
+export const toneBy = (v, cuts) => (v == null || !isFinite(v) ? "n" : v < cuts[0] ? "b2" : v < cuts[1] ? "b1" : v < cuts[2] ? "n" : v < cuts[3] ? "g1" : "g2");
+// A section that stays folded until tapped; its open or closed state survives redraws.
+export function fold(key, title, body, { badge = null } = {}) {
+  const open = !!S.ui.folds?.[key];
+  return `<details class="fold" data-fold="${key}" ${open ? "open" : ""}><summary><span class="ft">${esc(title)}</span>${badge != null ? `<span class="count">${esc(String(badge))}</span>` : ""}</summary><div class="foldbody">${body}</div></details>`;
+}

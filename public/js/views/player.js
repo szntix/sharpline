@@ -1,4 +1,4 @@
-import { S, computed, league, leagueOrDefault, pl } from "../state.js";
+import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
 import { signals, statusText } from "../engine.js";
@@ -40,7 +40,7 @@ export function viewPlayer(id) {
   if (g && pos !== "DEF") ctxBits.push(`${g.home === p.t ? "vs" : "at"} ${esc(pr.opp)}, ${esc(kickoffText(g))}`);
   if (pr?.spread != null && pr.total != null) ctxBits.push(`${esc(p.t)} ${pr.spread >= 0 ? "favored by " + pr.spread : "underdog by " + -pr.spread}, total ${pr.total}`);
   if (pr?.wx) ctxBits.push(`wind ${pr.wx.wind} mph`);
-  const chips = [ours ? `We rank #${ours} ${posLabel(pos)}` : "", exp ? `Experts #${exp} ${posLabel(pos)}` : "", pr?.src && SRC_NOTE[pr.src] ? SRC_NOTE[pr.src] : ""].filter(Boolean);
+  const chips = [ours ? `${({ blend: "We rank", model: "Our model ranks", experts: "Experts rank", sleeper: "Sleeper ranks" })[S.ui.src] || "We rank"} #${ours} ${posLabel(pos)}` : "", exp && S.ui.src !== "experts" ? `Experts #${exp} ${posLabel(pos)}` : "", pr?.src && SRC_NOTE[pr.src] ? SRC_NOTE[pr.src] : ""].filter(Boolean);
   const hero = `<a class="link" href="#players" style="display:inline-block;margin:6px 0">Back to players</a>
     <section class="phead" style="--team:${teamStripe(p.t)}">${emblem(p.t)}<div class="top2"><span class="pos ${posClass(pos)}">${posLabel(pos)}</span>${statusChip(pr?.status, pr?.practice)}</div><div class="nm">${esc(p.n)}</div>
       <div class="ctx">${ctxBits.map((b) => `<span>${b}</span>`).join("")}</div>${head}
@@ -53,7 +53,7 @@ export function viewPlayer(id) {
   const likely = sec("How likely is a big game?", `${dotplot(pr, { max, threshold: thr, id: "dp-" + id, name: p.n, range: [Math.max(0, quantile(pr, 0.1)), quantile(pr, 0.9)] })}
     <div class="cap" id="dp-${id}-cap">${dotCaption(pr, thr, p.n.split(" ")[0])}</div>
     <div class="thresholds" data-for="dp-${id}">${opts.map((t) => `<button data-thr="${t}" aria-pressed="${t === thr}">${t}+</button>`).join("")}</div>
-    <p class="small muted" style="margin-top:10px">Each dot is one of 20 equally likely outcomes. Drag the line to ask a different question. Ranges were checked against five seasons of results: the real score landed inside the 10th-to-90th range about 80% of the time.</p>`);
+    <p class="small muted" style="margin-top:10px">Each dot is one of 20 equally likely outcomes. Drag the line to ask a different question. ${S.ui.src !== "blend" ? "Ranges were checked against five seasons of results for the Blended projection; other sources use the same spread settings, which have not been checked separately:" : "Ranges were checked against five seasons of results:"} the real score landed inside the 10th-to-90th range about 80% of the time.</p>`);
 
   // 2. How we got the number
   function modelWhy(pid, pp, q) {
@@ -125,6 +125,7 @@ export function viewPlayer(id) {
     if (d) matchupSec = sec("The matchup", `<p>${esc(pr.opp)} has allowed <b>${d.v >= 0 ? f0(d.v * 100) + "% more" : f0(-d.v * 100) + "% fewer"}</b> fantasy points to ${posLabel(pos)}s than the average defense, recently weighted. That is ${d.p >= 50 ? "friendlier" : "tougher"} than ${d.p >= 50 ? d.p : 100 - d.p}% of the league.</p>
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
+  if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
   return feedError() + hero + likely + advSection(id, p) + built + stands + form + experts + matchupSec + notesSection(id, C);
 }
 
@@ -133,14 +134,20 @@ function notesSection(id, C) {
   return s.length ? sec("Worth knowing", noteList(s.map((x) => ({ t: x.t === "info" ? "" : x.t, s: x.s })))) : "";
 }
 
-// This season's efficiency from the nflverse weekly file, each against everyone at the position with at least two games.
+// This season's efficiency from the nflverse weekly file. Each stat is ranked against everyone at the position with two or more games, and the tile says
+// in words and color whether it is good: a meter filled to his percentile, a one-word grade, and the number in the grade's color.
 function advSection(id, p) {
   const adv = S.usage?.players?.[id]?.adv; if (!adv || !adv.g || !["QB", "RB", "WR", "TE"].includes(p.p)) return "";
   const peers = Object.values(S.usage.players).filter((x) => x.p === p.p && x.adv && x.adv.g >= 2);
-  const ep = (v) => (v >= 0 ? "+" : "") + v.toFixed(2), pc = (v) => Math.round(v * 100) + "%", n1 = (v) => v.toFixed(1), n2 = (v) => v.toFixed(2);
-  const rec = [["wopr", "WOPR (target and air yards share)", n2], ["ays", "Air yards share", pc], ["adot", "Average depth of target", n1], ["yac", "Yards after catch per catch", n1], ["recEpa", "EPA per target", ep], ["catchRate", "Catch rate", pc]];
-  const F = { QB: [["epaDb", "EPA per dropback", ep], ["cpoe", "Completion % over expected", (v) => (v >= 0 ? "+" : "") + v.toFixed(1)], ["rushEpa", "EPA per carry", ep], ["fd", "First downs a game", n1]], RB: [["rushEpa", "EPA per carry", ep], ["recEpa", "EPA per target", ep], ["fd", "First downs a game", n1], ["catchRate", "Catch rate", pc]], WR: rec, TE: rec }[p.p];
-  const tiles = F.filter(([k]) => adv[k] != null).map(([k, label, fmt]) => { const vals = peers.map((x) => x.adv[k]).filter((v) => v != null); const pct = vals.length >= 10 ? Math.round((100 * vals.filter((v) => v < adv[k]).length) / vals.length) : null;
-    return `<div><span class="num">${fmt(adv[k])}</span><small>${esc(label)}${pct != null ? `<br>better than ${pct}% of ${posLabel(p.p)}s` : ""}</small></div>`; }).join("");
-  return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px">This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}. EPA is expected points added per play, from nflverse. Early in the season these move a lot.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
+  const ep = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2), pc = (v) => Math.round(v * 100) + "%", n1 = (v) => v.toFixed(1), n2 = (v) => v.toFixed(2), cp = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+  const rec = [["wopr", "WOPR (target and air yards share)", n2], ["ays", "Air yards share", pc], ["adot", "Depth of target", n1, "style"], ["yac", "Yards after catch", n1], ["recEpa", "EPA per target", ep, "signed"], ["catchRate", "Catch rate", pc]];
+  const F = { QB: [["epaDb", "EPA per dropback", ep, "signed"], ["cpoe", "Completion % over expected", cp, "signed"], ["rushEpa", "EPA per carry", ep, "signed"], ["fd", "First downs a game", n1]], RB: [["rushEpa", "EPA per carry", ep, "signed"], ["recEpa", "EPA per target", ep, "signed"], ["fd", "First downs a game", n1], ["catchRate", "Catch rate", pc]], WR: rec, TE: rec }[p.p];
+  const TIER = [[85, "Elite", "g2"], [65, "Strong", "g1"], [35, "Average", "n"], [15, "Weak", "b1"], [0, "Poor", "b2"]];
+  const tiles = F.filter(([k]) => adv[k] != null).map(([k, label, fmt, kind]) => { const vals = peers.map((x) => x.adv[k]).filter((v) => v != null), v = adv[k];
+    const pct = vals.length >= 10 ? Math.round((100 * vals.filter((x) => x < v).length) / vals.length) : null; let word = "", tone = "n";
+    if (pct != null) { const t = TIER.find(([c]) => pct >= c); word = t[1]; tone = t[2]; if (kind === "style") { word = pct >= 65 ? "Deep" : pct <= 35 ? "Short" : "Mixed"; tone = "n"; }
+      if (kind === "signed") { if (v < 0 && (tone === "g1" || tone === "g2")) tone = "n"; if (v > 0 && (tone === "b1" || tone === "b2")) tone = "n"; } }
+    const aria = pct != null ? `${word}: better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet";
+    return `<div class="tile tone-${tone}" data-tone="${tone}"><span class="num">${fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(aria)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(label)}<br>${pct != null ? `<b>${word}</b> · better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet"}</small></div>`; }).join("");
+  return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Green is better than most ${posLabel(p.p)}s, <span class="key tone-n"></span>gray is about average, <span class="key tone-b2"></span>red is worse. This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}; early on these move a lot. EPA is expected points added per play, from nflverse.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
 }

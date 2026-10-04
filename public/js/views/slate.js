@@ -3,7 +3,7 @@ import { teamContext } from "../model.js";
 import { esc, f1, sgn, kickoffText, ago, plate, emblem, isDark } from "../ui.js";
 import { teamColors } from "../teams.js";
 import { slateMap } from "../charts.js";
-import { pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
+import { toneBy, pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
 
 const WX_ICON = "";
 function wxLine(g) {
@@ -81,10 +81,13 @@ export function viewGame(id) {
     ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`) : ""}`;
 }
 
-// How each defense has treated each position this season, against the league average (recency weighted, from nflverse).
+// How each defense has treated each position this season, against the league average (recency weighted, from nflverse), colored from the point of
+// view of the player facing it: green is a soft defense (a good matchup), red a tough one. An arrow and the sign say the same without color.
 function dvpSection(g) {
   const d = S.usage?.dvp; if (!d || (!d[g.home] && !d[g.away])) return "";
-  const cell = (team, pos) => { const v = d[team]?.[pos]; return v == null ? "–" : `${v >= 0 ? "+" : "−"}${Math.round(Math.abs(v) * 100)}%`; };
-  const rows = ["QB", "RB", "WR", "TE"].map((pos) => `<tr><th>${pos}</th><td>${cell(g.home, pos)}</td><td>${cell(g.away, pos)}</td></tr>`).join("");
-  return sec("Defense against each position", `<div style="overflow-x:auto"><table class="dvp"><thead><tr><th></th><th>${esc(g.home)} defense</th><th>${esc(g.away)} defense</th></tr></thead><tbody>${rows}</tbody></table></div><p class="small muted" style="margin-top:8px">Fantasy points each defense has allowed to the position compared with the league average: +20% means 20% more than a typical defense.</p>`);
+  const cell = (team, pos) => { const v = d[team]?.[pos]; if (v == null) return `<td class="tone-n">–</td>`; const t = toneBy(v, [-0.15, -0.05, 0.05, 0.15]), arrow = v >= 0.05 ? "▲" : v <= -0.05 ? "▼" : "▬";
+    return `<td class="tone-${t}" data-tone="${t}" title="${v >= 0 ? "Allows" : "Holds"} ${Math.round(Math.abs(v) * 100)}% ${v >= 0 ? "more" : "less"} than the average defense"><span class="arr" aria-hidden="true">${arrow}</span> ${v >= 0 ? "+" : "−"}${Math.round(Math.abs(v) * 100)}%</td>`; };
+  const rows = ["QB", "RB", "WR", "TE"].map((pos) => `<tr><th>${pos}</th>${cell(g.home, pos)}${cell(g.away, pos)}</tr>`).join("");
+  return sec("Defense against each position", `<div style="overflow-x:auto"><table class="dvp"><thead><tr><th></th><th>${esc(g.home)} defense<br><small>faces ${esc(g.away)}</small></th><th>${esc(g.away)} defense<br><small>faces ${esc(g.home)}</small></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Soft: a good matchup for the player facing it. <span class="key tone-n"></span>Average. <span class="key tone-b2"></span>Tough. The number is the fantasy points the defense has allowed to that position compared with the league average.</p>`);
 }

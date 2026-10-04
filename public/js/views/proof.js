@@ -28,12 +28,18 @@ function expertBars(pos) {
 
 function liveTracker() {
   const a = S.acc;
-  if (!a || !a.weeks?.length) return `<p>Tracking starts with this week's games. Before each kickoff the app records exactly what it projected, and after the games it grades those saved numbers against what happened. Nothing is graded after the fact, so there's no hindsight.</p><p class="muted small" style="margin-top:8px">Check back after Monday night. Results build up week by week and appear here.</p>`;
+  if (!a || !a.weeks?.length) return `<p>Tracking starts with this week's games. Before each kickoff the app saves what it projected, and after the games it grades those saved numbers against what happened. Nothing is graded after the fact, so there's no hindsight.</p><p class="muted small" style="margin-top:8px">Check back after Monday night. Results build up week by week and appear here.</p>`;
   const rows = [["Sharpline blend", "blend"], ["Our stat model", "model"], ["Experts", "experts"], ["Sleeper", "sleeper"]].filter(([, k]) => a.bySource[k]?.ALL?.n);
-  const best = Math.min(...rows.map(([, k]) => a.bySource[k].ALL.mae));
-  return `<p class="muted small" style="margin-bottom:8px">${a.weeks.length} graded week${a.weeks.length > 1 ? "s" : ""} this season, saved before kickoff. Average miss per player, in fantasy points (lower is better).</p>
-    <div class="bars3">${rows.map(([l, k]) => { const s = a.bySource[k].ALL; return `<div class="b3"><span>${l}</span><div class="t"><i class="${k === "experts" ? "e" : k === "model" ? "m" : "bl"}" style="width:${(s.mae / Math.max(...rows.map(([, kk]) => a.bySource[kk].ALL.mae))) * 100}%"></i></div><b>${s.mae.toFixed(2)}</b></div>`; }).join("")}</div>
-    ${a.coverage80 != null ? `<p style="margin-top:12px">Our 80% ranges captured <b>${Math.round(a.coverage80 * 100)}%</b> of ${a.graded} graded player-weeks.</p>` : ""}
+  const maes = rows.map(([, k]) => a.bySource[k].ALL.mae), best = Math.min(...maes), worst = Math.max(...maes, 0.01), app = a.bySource.app?.ALL;
+  const avail = ["Healthy", "Questionable", "Doubtful"].filter((k) => a.avail?.[k]?.n >= 5).map((k) => { const v = a.avail[k]; return `<div class="pr"><i class="${Math.abs(v.played - v.counted) <= 0.1 ? "fresh" : "stale"}"></i><div>${k}: <b>${Math.round(v.played * 100)}%</b> played<small>the app counted ${Math.round(v.counted * 100)}% · ${v.n} player-weeks</small></div></div>`; }).join("");
+  return `<p class="muted small" style="margin-bottom:10px">${a.weeks.length} graded week${a.weeks.length > 1 ? "s" : ""} this season. Each player's numbers are the last ones saved before his team kicked off${a.lead ? `, typically ${a.lead.median} hours before and never more than ${a.lead.max}` : ""}, so news after that is not in them.</p>
+    <h3 class="h3" style="margin:6px 0">Projection accuracy</h3>
+    <p class="muted small" style="margin-bottom:8px">Average miss in PPR fantasy points (lower is better), on the same ${a.common} player-weeks for every source, counting players who played.</p>
+    <div class="bars3">${rows.map(([l, k]) => { const s = a.bySource[k].ALL; return `<div class="b3"><span>${l}${s.mae === best && rows.length > 1 ? ' <small class="muted">best</small>' : ""}</span><div class="t"><i class="${k === "experts" ? "e" : k === "model" ? "m" : "bl"}" style="width:${(s.mae / worst) * 100}%"></i></div><b>${s.mae.toFixed(2)}</b></div>`; }).join("")}</div>
+    ${app?.n ? `<p class="small muted" style="margin-top:8px">Everyone the app projected, including players the other sources do not cover: average miss <b>${app.mae.toFixed(2)}</b> over ${app.n} player-weeks.</p>` : ""}
+    ${avail ? `<h3 class="h3" style="margin:16px 0 6px">Who actually played</h3><p class="muted small" style="margin-bottom:8px">Among players the app expected to play, by their injury designation. This checks the discount the app gives Questionable players.${a.noShows ? ` ${a.noShows} did not play.` : ""}</p><div class="plist card">${avail}</div>` : ""}
+    ${a.coverage80 != null ? `<p style="margin-top:14px">Our 80% ranges captured <b>${Math.round(a.coverage80 * 100)}%</b> of ${a.graded} graded player-weeks (players who played).</p>` : ""}
+    ${a.recomputed ? `<p class="small muted" style="margin-top:8px">${a.recomputed} of ${a.rows} player-weeks were saved before the app began freezing its computed numbers, so those were re-scored with the current model.</p>` : ""}
     <p class="small muted" style="margin-top:8px">${a.sleeperShare != null ? `Sleeper's projection counts for ${Math.round(a.sleeperShare * 100)}% of the consensus, tuned from these results.` : "Sleeper's projection currently counts for 35% of the consensus. That's a starting guess. After two graded weeks the data sets it."}</p>`;
 }
 

@@ -317,7 +317,7 @@ export function tradeReport(ctx, league, R, repl, myRoster, others) {
       const ev = evaluateTrade(ctx, league, R, repl, myRoster, [a], [b], team.roster);
       const fair = ev.giveValue / Math.max(1, ev.getValue), fairOk = fair > 0.7 && fair < 1.45;
       if (!(ev.lineupGain > 1)) { stats.noGainYou++; continue; }
-      if (!(ev.theirLineupGain > 0.5)) { stats.noGainThem++; if (fairOk) near.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain }); continue; }
+      if (!(ev.theirLineupGain > 0.5)) { stats.noGainThem++; if (fairOk && fair >= 0.8 && fair <= 1.25 && ev.lineupGain >= 3 && ev.theirLineupGain > -5) near.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain }); continue; }
       if (!fairOk) { stats.lopsided++; continue; }
       all.push({ team: team.name, give: [a], get: [b], ...ev, score: ev.lineupGain + 0.5 * ev.theirLineupGain });
     }

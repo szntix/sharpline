@@ -1,3 +1,4 @@
+import { spreadFor } from "./model.js";
 import { feedSignature } from "./refresh.js";
 import { api, sleeperApi, saveProfile } from "./api.js";
 import { toast } from "./ui.js";
@@ -8,7 +9,7 @@ import { buildProjections, rosValues, replacement, waiverLevel } from "./engine.
 export const S = {
   user: null, profile: null, players: null, feed: null, usage: null, outlook: null, acc: null, trending: {},
   week: null, activeWeek: null, errors: {}, loading: true, saveState: "saved", route: { name: "week", args: [] },
-  ui: { src: (() => { try { return localStorage.getItem("sharpline.src") || "blend"; } catch { return "blend"; } })(), trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
+  ui: { folds: {}, src: (() => { try { return localStorage.getItem("sharpline.src") || "blend"; } catch { return "blend"; } })(), trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
 };
 export let render = () => {};
 export const setRender = (fn) => { render = fn; };
@@ -42,7 +43,8 @@ export function withSource(P, src) {
   if (!src || src === "blend") return P;
   const proj = {};
   for (const [id, x] of Object.entries(P.proj)) { const raw = src === "model" ? x.model : src === "experts" ? x.experts : x.sleeper, scale = x.ppr > 0 ? x.mean / x.ppr : null;
-    proj[id] = raw != null && scale != null ? { ...x, mean: raw * scale, srcMissing: false } : { ...x, srcMissing: true }; }
+    const pos = x.pos || S.players[id]?.p;
+    proj[id] = raw != null && scale != null ? { ...x, mean: raw * scale, ppr: raw, sd: spreadFor(pos, src, raw) * (x.lscale || 1), srcMissing: false } : { ...x, srcMissing: true }; }
   return { ...P, proj };
 }
 export function computed(L = leagueOrDefault()) {

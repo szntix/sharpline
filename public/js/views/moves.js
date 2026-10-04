@@ -4,7 +4,7 @@ import { xppr } from "../model.js";
 import { SLOT_ELIG, SLOT_LABEL, positionsFor, inPosition } from "../scoring.js";
 import { esc, f1, f0, sgn, posLabel, posClass, plate, teamStripe } from "../ui.js";
 import { luck } from "../charts.js";
-import { loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
+import { toneBy, loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
 
 // A player's position as a colored chip, so a name is never just text.
 const posTag = (id) => { const p = S.players[id]; return p ? `<span class="pos ${posClass(p.p)}">${esc(posLabel(p.p))}</span>` : ""; };
@@ -84,7 +84,7 @@ function whyNoIdeas(rep) {
 }
 const ideaRow = (t, L, { near = false } = {}) => `<div class="row trade"><span class="plate swap" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg></span>
       <div class="who"><span class="name"><b class="lbl">Give</b>${t.give.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="name"><b class="lbl">Get</b>${t.get.map((id) => `${posTag(id)}<span class="nm">${esc(pname(id))}</span>`).join("")}</span><span class="sub"><span class="meta">With ${esc(t.team)}${t.why ? ` · ${esc(t.why)}` : ""}</span></span></div>
-      <div class="proj"><span class="num">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button>${near ? `<span class="tag ${t.theirLineupGain < -0.5 ? "down" : "flat"}"><i></i>${t.theirLineupGain < -0.5 ? `they lose ${f0(-t.theirLineupGain)}` : "they break even"}</span>` : `<span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span>`}</div></div>`;
+      <div class="proj"><span class="num tone-${toneBy(t.lineupGain, [-12, -3, 3, 12])}">${sgn(t.lineupGain, 0)}</span><small>for you</small></div><div class="act"><button class="btn sm" data-act="tr-load" data-give="${t.give.join(",")}" data-get="${t.get.join(",")}" data-team="${esc(L.others.find((o) => o.name === t.team)?.id || "")}">Review</button>${near ? `<span class="tag ${t.theirLineupGain < -0.5 ? "down" : "flat"}"><i></i>${t.theirLineupGain < -0.5 ? `they lose ${f0(-t.theirLineupGain)}` : "they break even"}</span>` : `<span class="tag ${t.theirLineupGain > 0 ? "up" : "flat"}"><i></i>they gain ${sgn(t.theirLineupGain, 0)}</span>`}</div></div>`;
 
 function viewTrades(L) {
   const C = computed(L), { P, R, repl } = C, c = C.c;
@@ -116,14 +116,16 @@ function viewTrades(L) {
   const focusHtml = !focus ? "" : sec(focus.side === "get" ? `Ways to get ${esc(focus.ids.map(short).join(" and "))}` : `What ${esc(focus.ids.map(short).join(" and "))} could bring back`,
     freeAgent ? `<div class="panel muted">${esc(focus.ids.map(pname).join(", "))} is not on another team in your league, so you can add him without a trade.</div>`
     : fRows.length ? `<p class="small muted" style="margin-bottom:10px">Swaps that are close in value, or that help both teams. Review loads one above.</p><div class="list">${fRows.map((t) => ideaRow(t, L, { near: !(t.theirLineupGain > 0.5) })).join("")}</div>` : `<div class="panel muted">No realistic one-for-one swap: none of the right players is close in value, and none helps both teams. Try adding a second player to either side.</div>`);
+  const pitchCap = () => Math.max(0, Math.min(3, 6 - (rep?.ideas.length || 0)));
   const rep = L.others.length ? (C.cache.report || (C.cache.report = tradeReport(c, L, R, repl, L.roster, L.others))) : null, ideas = rep?.ideas || [];
+  const pitches = rep ? rep.near.slice(0, pitchCap()) : [];
   const preview = give.length && get.length ? tradePreview(L, C, give, get, partner) : "";
   return `${syncLine(L)}<label class="field" style="max-width:340px">Trading with<select data-bind="partner"><option value="">Anyone (search all players)</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === S.ui.partner ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
     <div class="trade-cols"><div class="panel"><h3 class="h2">You give</h3><div class="chips" style="margin:10px 0">${chips(give, "give")}</div><select data-bind="tr-give" aria-label="Add a player you give"><option value="">Add from your roster…</option>${myOpts}</select></div>
       <div class="panel"><h3 class="h2">You get</h3><div class="chips" style="margin:10px 0">${chips(get, "get")}</div>${partner ? `<select data-bind="tr-get" aria-label="Add a player you get"><option value="">Add from ${esc(partner.name)}…</option>${theirOpts}</select>` : `<div class="search"><input type="search" id="search-get" data-search="get" placeholder="Search any player" autocomplete="off"><ul hidden></ul></div>`}</div></div>${result}${preview}
     ${focusHtml}
     ${focus ? "" : !L.others.length ? sec("Trade ideas", `<div class="panel"><div class="verdict">Trade ideas need the other teams</div><p class="small muted" style="margin:8px 0 12px">Suggestions compare your roster with each team in your league, so there is nothing to suggest until they are added. You can still build an offer yourself above.</p>${L.sleeper ? `<p class="small muted">Refresh rosters above to pull them from Sleeper.</p>` : `<button class="btn sm" data-act="edit-teams" data-id="${L.id}">Add other teams</button>`}</div>`) : ""}${!focus && L.others.length ? sec("Trade ideas", ideas.length ? `<div class="list">${ideas.map((t) => ideaRow(t, L)).join("")}</div>` : whyNoIdeas(rep)) : ""}
-    ${!focus && L.others.length && rep.near.length && ideas.length < 3 ? sec("Worth a pitch", `<p class="small muted" style="margin-bottom:10px">These help your lineup but not theirs, so you would have to sell it. Nothing here is a fair win for both sides.</p><div class="list">${rep.near.map((t) => ideaRow(t, L, { near: true })).join("")}</div>`, "Helps you, not them") : ""}`;
+    ${!focus && L.others.length && pitches.length && ideas.length < 3 ? sec("Worth a pitch", `<p class="small muted" style="margin-bottom:10px">Close in value and a real gain for you, and they would barely notice the cost. Fewer than three win-win deals exist, so these are the best of the rest.</p><div class="list">${pitches.map((t) => ideaRow(t, L, { near: true })).join("")}</div>`, "Helps you, not them") : ""}`;
 }
 
 // Points that run ahead of workload tend to fade, and the reverse. Workload predicted next-game scoring better than recent points in every test season for RB, WR and TE.

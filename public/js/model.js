@@ -52,6 +52,12 @@ export function availability(sleeperStatus, official) {
   if (official && (official.s || official.p)) return { status: official.s || null, practice: official.p || null, injury: official.i || null, official: !!official.s };
   return { status: sleeperStatus && sleeperStatus !== "Healthy" ? sleeperStatus : null, practice: null, injury: null, official: false };
 }
+// How wide a player's range of outcomes is, in PPR points, from his projection. The same formula for every source, so switching sources keeps ranges
+// and win odds in step with the number shown.
+export function spreadFor(pos, kind, pre) {
+  const M = MODEL.pos?.[pos], ab = (kind === "blend" || kind === "experts") && M?.sdBlend ? M.sdBlend : M?.sdModel || [3, 0.3, 1];
+  return Math.max(1, (ab[0] + ab[1] * Math.max(pre, 0.5)) * ab[2]);
+}
 // Tested on official designations from the final injury report: Doubtful players almost never played, and Questionable ones averaged about 80%.
 // Against the app's earlier rule that is about 1% less projection error, roughly half a point a week. A status that only comes from Sleeper
 // (before the official report exists) keeps the earlier rule, and within 90 minutes of kickoff a Questionable player who has not been ruled out
@@ -130,8 +136,7 @@ export function project(row, { sleeperShare } = {}) {
   const pre = mean;
   const mult = row.bye ? 0 : availMult(row.status, { official: row.stOfficial, minsToKick: row.minsToKick });
   mean *= mult;
-  const ab = (kind === "blend" || kind === "experts") && M?.sdBlend ? M.sdBlend : M?.sdModel || [3, 0.3, 1];
-  const sd = Math.max(1, (ab[0] + ab[1] * Math.max(pre, 0.5)) * ab[2]);
+  const sd = spreadFor(row.pos, kind, pre);
   return { kind, roleUnclear, mean, pre, sd, model: m?.ppr ?? null, base: m?.base ?? null, parts: m?.parts ?? null, experts: c?.ecr ?? null, sleeper: c?.sleeper ?? row.sleeper ?? null,
     consensus: c?.pts ?? null, weights: { model: wM, experts: wE }, mult };
 }

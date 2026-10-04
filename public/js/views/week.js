@@ -2,7 +2,7 @@ import { withSource, SOURCES, S, league, computed, leagueOrDefault, pname, pl } 
 import { optimal, matchup, bestBallExpectation, lineupNotes } from "../engine.js";
 import { esc, f1, f0, pct, ago, posLabel } from "../ui.js";
 import { drive } from "../charts.js";
-import { pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
+import { fold, pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
 import { SLOT_LABEL } from "../scoring.js";
 
 const title = () => `Week ${S.feed?.week ?? S.week ?? ""}`;
@@ -44,7 +44,7 @@ export function viewWeek() {
   const benchIds = [...m.best.bench.filter((id) => !(m.alt && id === m.alt.swap.in)), ...(m.alt ? [m.alt.swap.out] : [])].sort((a, b) => (P.proj[b]?.mean || 0) - (P.proj[a]?.mean || 0));
   const bench = benchIds.map((id) => prow(id, C, { sig: true, dim: true })).join("");
   return `${feedError()}${hero}${pulse(S.feed)}${expertsNote(S.feed)}<div class="stack" style="margin-top:14px">${swap}</div>
-    ${notes.length ? sec("Things to know", noteList(notes)) : ""}
+    ${notes.length ? fold("notes", "Things to know", noteList(notes), { badge: notes.length }) : ""}
     ${sourcesPanel(L, C)}
     ${sec("Starters", `<div class="list">${starters}</div>`, `${f1(m.best.total)} projected`)}
     ${sec("Bench", `<div class="list">${bench || `<div class="row"><div></div><div class="muted">No bench players.</div></div>`}</div>`, L.sleeper ? "" : `<button class="link" data-act="edit-roster" data-id="${L.id}">Edit roster</button>`)}`;
@@ -74,7 +74,7 @@ function sourcesPanel(L, C) {
   const blendMean = (id) => C.P0.proj[id]?.mean || 0;
   const lineup = Object.fromEntries(keys.map((k) => { const P = withSource(C.P0, k); return [k, optimal(L.roster, L.slots, (id) => P.proj[id]?.mean || 0, posOf)]; }));
   const rows = lineup.blend.starters.map((s, i) => ({ slot: s.slot, cells: keys.map((k) => lineup[k].starters[i]?.id || null) })).filter((r) => r.cells.some((c) => c !== r.cells[0]));
-  if (!rows.length) return sec("Lineup by source", `<p class="small muted">Blended, our model, the experts and Sleeper all start the same lineup this week.</p>`);
+  if (!rows.length) return fold("sources", "Lineup by source", `<p class="small muted">Blended, our model, the experts and Sleeper all start the same lineup this week.</p>`, { badge: "same" });
   const cost = keys.map((k) => lineup[k].starters.reduce((t, s) => t + (s.id ? blendMean(s.id) : 0), 0) - lineup.blend.starters.reduce((t, s) => t + (s.id ? blendMean(s.id) : 0), 0));
-  return sec("Lineup by source", `<div style="overflow-x:auto"><table class="srct"><thead><tr><th></th>${keys.map((k) => `<th>${SOURCES[k]}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr><th>${esc(SLOT_LABEL[r.slot] || r.slot)}</th>${r.cells.map((c, i) => `<td class="${i && c !== r.cells[0] ? "diff" : ""}">${c ? esc(last(c)) : "–"}</td>`).join("")}</tr>`).join("")}<tr class="tot"><th>Cost</th>${cost.map((c, i) => `<td>${i ? (Math.abs(c) < 0.05 ? "same" : (c > 0 ? "+" : "−") + Math.abs(c).toFixed(1)) : "–"}</td>`).join("")}</tr></tbody></table></div><p class="small muted" style="margin-top:8px">Only slots where the sources disagree. The Cost row is what each source's lineup gives up by the Blended numbers, which tested most accurate. Change the numbers used everywhere in Settings.</p>`);
+  return fold("sources", "Lineup by source", `<div style="overflow-x:auto"><table class="srct"><thead><tr><th></th>${keys.map((k) => `<th>${SOURCES[k]}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr><th>${esc(SLOT_LABEL[r.slot] || r.slot)}</th>${r.cells.map((c, i) => `<td class="${i && c !== r.cells[0] ? "diff" : ""}">${c ? esc(last(c)) : "–"}</td>`).join("")}</tr>`).join("")}<tr class="tot"><th>Cost</th>${cost.map((c, i) => `<td>${i ? (Math.abs(c) < 0.05 ? "same" : (c > 0 ? "+" : "−") + Math.abs(c).toFixed(1)) : "–"}</td>`).join("")}</tr></tbody></table></div><p class="small muted" style="margin-top:8px">Only slots where the sources disagree. The Cost row is what each source's lineup gives up by the Blended numbers, which tested most accurate. Change the numbers used everywhere in Settings.</p>`, { badge: `${rows.length} differ` });
 }

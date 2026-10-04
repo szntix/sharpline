@@ -14,7 +14,7 @@
   --neu: color-mix(in srgb, #2b2a27 13%, #faf9f6); --neu-ink: #2b2a27; --slate: #edede9;
   --band: color-mix(in srgb, #2b2a27 11%, #faf9f6); --band-ink: #2b2a27;
   --brand: #2b5837; --brand-ink: #ffffff; --link: #2b5837; --turf-a: #2b5837; --turf-b: #2e6140; --turf-deep: #1e3d26;
-  --up: #4db874; --up-ink: #1b7040; --down: #b3302a; --down-ink: #a32a24; --warn: #e9803a; --warn-ink: #9a4d12; --mid: #f1cb4a; --lime: #9ec45f;
+  --up: #4db874; --up-ink: #1b7040; --down: #b3302a; --down-ink: #a32a24; --warn: #e9803a; --warn-ink: #9a4d12; --warn-ink-strong: #7f410f; --mid: #f1cb4a; --lime: #9ec45f;
   --qb: #e4452f; --rb: #63d08b; --wr: #0c658e; --te: #f2d61c; --dst: #623801; --k: #9e63e8;
   --turf: var(--brand); --turf-soft: var(--hair2); --foe: var(--down); --foe-soft: var(--hair2); --market: var(--warn); --expert: var(--ink3);
   --r: 10px; --rl: 20px;
@@ -31,7 +31,7 @@
     --neu: color-mix(in srgb, #d8d8d3 20%, #1f1f23); --neu-ink: #d8d8d3; --slate: #27272b;
     --band: #34343a; --band-ink: #e4e4df;
     --brand: #3c7a50; --brand-ink: #ffffff; --link: #7cc795; --turf-a: #2b5837; --turf-b: #2e6140; --turf-deep: #1e3d26;
-    --up-ink: #6fd39a; --down: #c9453e; --down-ink: #f08a80; --warn-ink: #f2a56b;
+    --up-ink: #6fd39a; --down: #c9453e; --down-ink: #f08a80; --warn-ink: #f2a56b; --warn-ink-strong: #f2a56b;
   }
 }
 :root[data-theme="dark"] {
@@ -39,7 +39,7 @@
   --hair: rgba(255,255,255,.08); --emb-filter: brightness(0) invert(1); --emb-op: .05; --hair2: rgba(255,255,255,.14); --rule: rgba(255,255,255,.08); --edge: #76767b;
   --lift: inset 0 1px 0 rgba(255,255,255,.04); --lift-sm: none; --plate-edge: rgba(255,255,255,.14); --halo: rgba(255,255,255,.12); --emix: #fff; --epct: 62%;
   --neu: color-mix(in srgb, #d8d8d3 20%, #1f1f23); --neu-ink: #d8d8d3; --slate: #27272b; --band: #34343a; --band-ink: #e4e4df;
-  --brand: #3c7a50; --brand-ink: #ffffff; --link: #7cc795; --up-ink: #6fd39a; --down: #c9453e; --down-ink: #f08a80; --warn-ink: #f2a56b;
+  --brand: #3c7a50; --brand-ink: #ffffff; --link: #7cc795; --up-ink: #6fd39a; --down: #c9453e; --down-ink: #f08a80; --warn-ink: #f2a56b; --warn-ink-strong: #f2a56b;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -455,3 +455,20 @@ select:focus-visible, input:focus-visible { outline: 2px solid var(--link); outl
 .srcstrip .srcact { display: inline-flex; gap: 14px; }
 .srct { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 13px; } .srct th, .srct td { padding: 10px 4px; text-align: center; border-bottom: 1px solid var(--hair); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .srct th:first-child { width: 58px; text-align: left; font-weight: 700; } .srct thead th { color: var(--ink2); font-weight: 600; font-size: 12px; } .srct td { color: var(--ink2); } .srct td.diff { color: var(--ink); font-weight: 800; } .srct tr.tot th, .srct tr.tot td { border-bottom: 0; color: var(--ink2); font-size: 12px; }
+
+/* Tones: bad, weak, neutral, good, strong. Each has a fill (bars, washes) and an ink (text); the light and dark inks come from the existing tokens. */
+.tone-g2 { --tf: var(--up); --ti: var(--up-ink); } .tone-g1 { --tf: var(--lime); --ti: var(--up-ink); } .tone-n { --tf: var(--ink3); --ti: var(--ink2); } .tone-b1 { --tf: var(--warn); --ti: var(--warn-ink-strong); } .tone-b2 { --tf: var(--down); --ti: var(--down-ink); }
+.num[class*="tone-"] { color: var(--ti); }
+.tile .num { color: var(--ti); } .tile { border-top: 3px solid var(--tf) !important; }
+.meter { display: block; position: relative; height: 8px; margin: 8px 0 6px; border-radius: 4px; background: var(--hair2); overflow: hidden; } .meter i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--tf); }
+.meter::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--ink2); opacity: .55; }
+.tile small b { color: var(--ti); font-weight: 800; }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 5px 0 2px; vertical-align: -1px; background: var(--tf); }
+.dvp td[class*="tone-"] { font-weight: 800; color: var(--ti); background: color-mix(in srgb, var(--tf) 16%, transparent); } .dvp td.tone-n { background: transparent; color: var(--ink2); font-weight: 700; } .dvp .arr { font-size: 11px; } .dvp thead small { font-weight: 500; font-size: 12px; color: var(--ink2); }
+.fold { background: var(--paper); border: 1px solid var(--hair); border-radius: var(--r); margin: 12px 0; } .fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 0 14px; cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; } .fold > summary::after { content: "▸"; color: var(--ink2); font-size: 15px; transition: transform .15s ease; } .fold[open] > summary::after { transform: rotate(90deg); }
+.fold .ft { font-stretch: 80%; font-weight: 800; font-size: 19px; flex: 1; } .fold .count { font-size: 13px; font-weight: 700; color: var(--ink); background: var(--hair2); border-radius: 999px; padding: 3px 10px; }
+.fold .foldbody { padding: 0 14px 14px; } @media (prefers-reduced-motion: reduce) { .fold > summary::after { transition: none; } }
+.plist.card { background: var(--paper); border: 1px solid var(--hair); border-radius: var(--r); padding: 6px 14px; }
+.plist.card .pr i { width: 9px; height: 9px; border-radius: 50%; background: var(--up); } .plist.card .pr i.stale { background: var(--warn); }
+.plist.card .pr small { display: block; color: var(--ink2); font-size: 12.5px; margin-top: 2px; }
