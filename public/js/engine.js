@@ -441,3 +441,16 @@ export function lineupNotes(ctx, P, starterIds, oppStarterIds = []) {
   }
   return notes;
 }
+
+// Matchup and game strength: the stat model's own estimate, in points, of what this week's setting adds to a player against a typical week:
+// the betting market's team total, the opponent's defense against his position, wind and cold, and home field. Workload is left out.
+// Ranked within his position this week, so the tone is honest whatever the scale. Players the model does not cover get none.
+export function matchupStrength(ctx, P) {
+  const out = {}, by = {};
+  for (const [id, x] of Object.entries(P.proj)) { if (!x.parts || x.bye || !(x.mean > 0)) continue; const pos = ctx.players[id]?.p; if (!pos) continue;
+    const pts = ((x.parts.env || 0) + (x.parts.dvp || 0) + (x.parts.wind || 0) + (x.parts.home || 0)) * (x.lscale || 1); out[id] = { pts, pos }; (by[pos] ||= []).push(pts); }
+  const TONE = [[85, "g2", "Great", 5], [65, "g1", "Good", 4], [35, "n", "Neutral", 3], [15, "b1", "Tough", 2], [0, "b2", "Very tough", 1]];
+  for (const [id, m] of Object.entries(out)) { const peers = by[m.pos]; if (peers.length < 8) { Object.assign(m, { pct: null, tone: "n", word: "Neutral", lvl: 3 }); continue; }
+    const pct = Math.round((100 * peers.filter((v) => v < m.pts).length) / peers.length), t = TONE.find(([c]) => pct >= c); Object.assign(m, { pct, tone: t[1], word: t[2], lvl: t[3] }); }
+  return out;
+}

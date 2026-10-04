@@ -59,7 +59,7 @@ export default async (req) => {
       for (const t of Object.values(teams)) t.games.sort((a, b) => a.week - b.week);
       return { season, week, leagueAvgImplied: +avg.toFixed(2), teams };
     });
-    return json(data);
+    return json(data, 200, { "cache-control": "public, max-age=600", "netlify-cdn-cache-control": "public, durable, max-age=3600, stale-while-revalidate=21600" });   // shared by everyone and changes about weekly
   } catch (e) {
     return fail(`Outlook failed: ${e.message}`, 502);
   }

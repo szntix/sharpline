@@ -5,7 +5,7 @@ import { signals, statusText } from "../engine.js";
 import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe, emblem } from "../ui.js";
 import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots } from "../charts.js";
 import { quantile } from "../engine.js";
-import { loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
+import { mmHtml, loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
 
 const AGE = (p) => (p.a ? `, age ${Math.floor(p.a)}` : "");
 export const defaultThr = (pr, pos) => Math.max(5, Math.round(pr.mean / 5) * 5);
@@ -126,7 +126,7 @@ export function viewPlayer(id) {
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
   if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
-  return feedError() + hero + likely + advSection(id, p) + built + stands + form + experts + matchupSec + notesSection(id, C);
+  return feedError() + hero + matchLine(id, C, p) + likely + advSection(id, p) + built + stands + form + experts + matchupSec + notesSection(id, C);
 }
 
 function notesSection(id, C) {
@@ -150,4 +150,11 @@ function advSection(id, p) {
     const aria = pct != null ? `${word}: better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet";
     return `<div class="tile tone-${tone}" data-tone="${tone}"><span class="num">${fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(aria)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(label)}<br>${pct != null ? `<b>${word}</b> · better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet"}</small></div>`; }).join("");
   return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Green is better than most ${posLabel(p.p)}s, <span class="key tone-n"></span>gray is about average, <span class="key tone-b2"></span>red is worse. This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}; early on these move a lot. EPA is expected points added per play, from nflverse.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
+}
+
+// The matchup in words, with the same meter as the lineup rows.
+function matchLine(id, C, p) {
+  const m = C.mu?.[id]; if (!m) return "";
+  const pts = `${m.pts >= 0 ? "+" : "−"}${Math.abs(m.pts).toFixed(1)}`;
+  return `<p class="matchline tone-${m.tone}">${mmHtml(m, { label: false })}<span><b>${m.word === "Neutral" ? "Neutral matchup" : `${m.word} matchup`}</b> · ${pts} points from the game and opponent${m.pct != null ? `, better than ${m.pct}% of ${posLabel(p.p)}s this week` : ""}</span></p>`;
 }

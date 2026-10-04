@@ -1,6 +1,7 @@
 import { runCapture } from "./lib/capture.mjs";
 import { buildFeed } from "./feed.mjs";
 import { sleeper } from "./lib/util.mjs";
+import { seasonActive } from "./lib/season.mjs";
 
 // Wakes every 15 minutes, checks the calendar, and does nothing unless something is due: every 15
 // minutes inside a game window, hourly on other game days, every few hours midweek. Whatever it
@@ -15,6 +16,8 @@ const within = (promise, ms, what) => {
 };
 
 export default async () => {
+  const season = await seasonActive();
+  if (!season.active) return new Response(JSON.stringify({ ok: true, skipped: "off-season", nextGame: season.nextGame, lastGame: season.lastGame }), { headers: { "content-type": "application/json" } });
   const out = await runCapture({
     loadFeed: () => within(buildFeed(), 24000, "assembling the feed"),
     loadTrends: () => within(Promise.all([sleeper("players/nfl/trending/add?lookback_hours=24&limit=200"), sleeper("players/nfl/trending/drop?lookback_hours=24&limit=200")]).then(([add, drop]) => ({ add, drop })), 12000, "reading Sleeper trends"),

@@ -40,21 +40,22 @@ export function prow(id, C, { slot = null, sig = false, act = "", dim = false, p
   const exp = showExp && C.ranks.exp[id] ? ` · experts ${posLabel(pos)}${C.ranks.exp[id]}` : "";
   const note = SRC_NOTE[pr?.src] || "";
   const chip = statusChip(pr?.status, pr?.practice);
-  const tags = gain ? [] : (sig ? signals(id, C.c, C.P).filter((x) => x.k).slice(0, 2) : []);
+  const tags = [];   // lineup rows stay clean: health is the ring, matchup is the meter, and everything else lives in the profile
   const gainHtml = gain ? `<span class="tag ${/^\+/.test(gain) ? "up" : "flat"}"><i></i>${esc(gain)}</span>` : "";
   const tagHtml = tags.map((x, n) => `<span class="tag ${x.t}${n ? " t2" : ""}" title="${esc(x.s)}"><i></i>${esc(x.k)}<span class="sr">: ${esc(x.s)}</span></span>`).join("");
   // value "model" shows our stat model on its own, in this league's scoring; players it does not cover show a dash.
   const modelPts = pr?.model != null && pr.ppr > 0 ? pr.model * (pr.mean / pr.ppr) : null;
   const srcWord = { model: "our model", experts: "experts", sleeper: "Sleeper" }[S.ui.src];
-  const shownNum = srcWord
-    ? `<span class="num">${pr?.mean > 0 ? f1(pr.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${pr?.srcMissing ? "blended" : srcWord}</small>`
-    : `<span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${note ? esc(note) : "&nbsp;"}</small>`;
+  // Under the number: the matchup meter when the model covers him. A caption appears only for exceptions (an estimate, a bye, a number kept from Blended).
+  const mu = C.mu?.[id], exception = srcWord ? (pr?.srcMissing ? "blended" : "") : (/estimate|bye|injur|no /i.test(note) ? note : "");
+  const under = `${mu ? mmHtml(mu) : ""}${exception ? `<small>${esc(exception)}</small>` : mu ? "" : "<small>&nbsp;</small>"}`;
+  const shownNum = `<span class="num">${pr?.mean > 0 || (!srcWord && (pr?.src === "none" || pr?.bye)) ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span>${under}`;
   const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
     : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
   return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
     ${lead}
     <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
-      <span class="sub"><span class="meta">${esc(where || p.t || "FA")}${exp}</span>${tagHtml ? `<span class="tags">${tagHtml}</span>` : ""}</span></div>
+      <span class="sub"><span class="meta">${esc(where || p.t || "FA")}${exp}</span></span></div>
     <div class="proj">${shownNum}</div>
     ${act || gainHtml ? `<div class="act">${act}${gainHtml}</div>` : ""}</div>`;
 }
@@ -91,3 +92,6 @@ export function fold(key, title, body, { badge = null } = {}) {
   const open = !!S.ui.folds?.[key];
   return `<details class="fold" data-fold="${key}" ${open ? "open" : ""}><summary><span class="ft">${esc(title)}</span>${badge != null ? `<span class="count">${esc(String(badge))}</span>` : ""}</summary><div class="foldbody">${body}</div></details>`;
 }
+
+// Five bars, filled to the matchup's level and colored by its tone. Wordless on rows; the profile says it in words.
+export const mmHtml = (m, { label = true } = {}) => `<span class="mm tone-${m.tone}" ${label ? `role="img" aria-label="${m.word} matchup and game"` : 'aria-hidden="true"'}>${[1, 2, 3, 4, 5].map((n) => `<i${n <= m.lvl ? ' class="on"' : ""}></i>`).join("")}</span>`;

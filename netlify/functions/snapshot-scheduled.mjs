@@ -4,6 +4,7 @@ import { computeUsage } from "./lib/history.mjs";
 import { loadPlayers } from "./players.mjs";
 import { makeRow, gameMap } from "../../public/js/model.js";
 import { freezeRow } from "./lib/freeze.mjs";
+import { seasonActive } from "./lib/season.mjs";
 
 // Every few hours: refresh the data, and record exactly what the model knew about each player before
 // his team kicked off, including the numbers it computed from that. A team's rows freeze the moment its game starts, so grading is never hindsight.
@@ -11,6 +12,8 @@ import { freezeRow } from "./lib/freeze.mjs";
 export const config = { schedule: "0 */3 * * *" };
 
 export default async () => {
+  const season = await seasonActive();
+  if (!season.active) return new Response(JSON.stringify({ ok: true, skipped: "off-season", nextGame: season.nextGame, lastGame: season.lastGame }), { headers: { "content-type": "application/json" } });
   const [feed, usage, players] = await Promise.all([buildFeed(), computeUsage(), loadPlayers()]);
   const key = `${feed.season}-w${feed.week}`, st = store("frozen");
   const doc = (await st.get(key, { type: "json" }).catch(() => null)) || { season: feed.season, week: feed.week, rows: {} };

@@ -3,7 +3,7 @@ import { feedSignature } from "./refresh.js";
 import { api, sleeperApi, saveProfile } from "./api.js";
 import { toast } from "./ui.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { buildProjections, rosValues, replacement, waiverLevel } from "./engine.js";
+import { buildProjections, rosValues, replacement, waiverLevel, matchupStrength } from "./engine.js";
 
 // Everything the views share: loaded data, the signed-in user's profile, and derived projections.
 export const S = {
@@ -52,7 +52,7 @@ export function computed(L = leagueOrDefault()) {
   const key = JSON.stringify([L, S.ui.src, S.feed.fetchedAt, S.feed.week, S.usage?.asOf, !!S.outlook, S.acc?.sleeperShare]);
   if (memo.key === key) return memo.v;
   const c = ctx(), P0 = buildProjections(c, L), P = withSource(P0, S.ui.src), R = rosValues(c, L, P), repl = waiverLevel(c, L, R, replacement(c, L, R));
-  memo.key = key; memo.v = { c, P, P0, R, repl, ranks: rankTables(P, S.feed), cache: {}, L };
+  memo.key = key; memo.v = { c, P, P0, R, repl, mu: matchupStrength(c, P0), ranks: rankTables(P, S.feed), cache: {}, L };
   return memo.v;
 }
 

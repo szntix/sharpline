@@ -1,4 +1,4 @@
-import { cached, getText, nflState, normName } from "./util.mjs";
+import { getTextConditional, cachedConditional, cached, getText, nflState, normName } from "./util.mjs";
 import { gsisToSleeper } from "./sources.mjs";
 import { loadPlayers } from "../players.mjs";
 import { MODEL } from "../../../public/js/coefs.js";
@@ -30,8 +30,12 @@ function advanced(now) {
     recEpa: tg >= 6 ? k(repa / tg, 3) : null, adot: tg >= 6 ? k(ray / tg, 1) : null, yac: rec >= 4 ? k(yac / rec, 1) : null, catchRate: tg >= 6 ? k(rec / tg, 3) : null,
     ays: k(ays / g, 3), wopr: k(wopr / g, 3), fd: k((pfd + rfd + refd) / g, 1) };
 }
-async function seasonRows(season) {
-  const text = await getText(`${NFLV}/stats_player/stats_player_week_${season}.csv`, { timeout: 45000 });
+// The fetcher cachedConditional wants: unchanged (304), not published yet (404), or the parsed rows with the file's ETag.
+const rowsFetcher = (season) => async (etag) => {
+  const r = await getTextConditional(`${NFLV}/stats_player/stats_player_week_${season}.csv`, etag, { timeout: 45000 });
+  return r.text != null ? { data: parseRows(r.text), etag: r.etag } : r;
+};
+function parseRows(text) {
   const lines = text.split("\n"); const head = splitLine(lines[0].replace(/\r$/, ""));
   const ix = Object.fromEntries(head.map((h, i) => [h, i]));
   const need = ["player_id", "position", "season_type", "week", "team", "opponent_team", "fantasy_points_ppr", "targets", "carries", "target_share", "player_display_name"];
@@ -60,8 +64,8 @@ export async function computeUsage() {
   return cached("usage-v4", 60 * 60e3, async () => {
     const state = await nflState(); const season = Number(state.season);
     const [prev, cur, players] = await Promise.all([
-      cached(`rows2-${season - 1}`, 30 * 864e5, () => seasonRows(season - 1)).catch(() => []),
-      cached(`rows2-${season}`, 50 * 60e3, () => seasonRows(season)),
+      cachedConditional(`rows2-${season - 1}`, 30 * 864e5, rowsFetcher(season - 1)).catch(() => []),
+      cachedConditional(`rows2-${season}`, 50 * 60e3, rowsFetcher(season)),
       loadPlayers(),
     ]);
     const g2s = await gsisToSleeper(players);

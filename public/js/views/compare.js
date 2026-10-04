@@ -1,4 +1,4 @@
-import { S, computed, pl } from "../state.js";
+import { withSource, S, computed, pl } from "../state.js";
 import { duel, duelRecord, xppr } from "../model.js";
 import { pairCorr } from "../research.js";
 import { quantile } from "../engine.js";
@@ -34,6 +34,7 @@ export function viewCompare(a, b) {
     { label: "Bad week", a: quantile(A, 0.1), b: quantile(B, 0.1) },
     { label: "Great week", a: quantile(A, 0.9), b: quantile(B, 0.9) },
     { label: "Team points", a: A.implied, b: B.implied, fa: A.implied != null ? f1(A.implied) : "–", fb: B.implied != null ? f1(B.implied) : "–" },
+    { label: "Matchup & game", a: C.mu?.[a]?.pts, b: C.mu?.[b]?.pts, fa: C.mu?.[a] ? `${C.mu[a].pts >= 0 ? "+" : "−"}${Math.abs(C.mu[a].pts).toFixed(1)}` : "–", fb: C.mu?.[b] ? `${C.mu[b].pts >= 0 ? "+" : "−"}${Math.abs(C.mu[b].pts).toFixed(1)}` : "–", tol: 0.05 },
     { label: "Recent avg", a: u(a)?.form, b: u(b)?.form, fa: f1(u(a)?.form), fb: f1(u(b)?.form) },
   ];
   if (pa.p !== "QB" && pb.p !== "QB") rows.push({ label: "Targets/game", a: u(a)?.tgt, b: u(b)?.tgt, fa: f1(u(a)?.tgt), fb: f1(u(b)?.tgt) }, { label: "Target share", tol: 0.005, a: u(a)?.ts, b: u(b)?.ts, fa: u(a) ? pct(u(a).ts) : "–", fb: u(b) ? pct(u(b).ts) : "–" });
@@ -44,14 +45,27 @@ export function viewCompare(a, b) {
   for (const [k, label, fmt] of XADV) if (xad(a)?.[k] != null && xad(b)?.[k] != null) rows.push({ label, a: xad(a)[k], b: xad(b)[k], fa: fmt(xad(a)[k]), fb: fmt(xad(b)[k]), tol: 0.0005, adv: k });
   if (ea && eb) rows.push({ label: "Expert rank", a: ea, b: eb, fa: posLabel(pa.p) + ea, fb: posLabel(pb.p) + eb, lowerBetter: true });
   const fa = quantile(A, 0.1), fb = quantile(B, 0.1), ca = quantile(A, 0.9), cb = quantile(B, 0.9);
-  const verdict = [`<b>Lean ${esc(short(leader[1].n))}</b>: ${(leader[0] === a ? gap : -gap) >= 0.05 ? `${Math.abs(gap).toFixed(1)} points ahead on the projection, and` : `his projection is ${Math.abs(gap) < 0.05 ? "level" : `${Math.abs(gap).toFixed(1)} points lower`}, but his range is wider on the upside, so`} ${f0(leader[3] * 100)} times in 100 he outscores the other.`];
+  const verdict = [`<b>Lean ${esc(short(leader[1].n))}</b>: ${Math.abs(gap) < 0.05 ? "level on the projection, and" : `${Math.abs(gap).toFixed(1)} points ahead on the projection, and`} ${f0(leader[3] * 100)} times in 100 he outscores the other.`];
   if (leader[0] === a ? fa < fb - 1.5 : fb < fa - 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher floor, so he's the safer pick if you're protecting a lead.`);
   if (leader[0] === a ? cb > ca + 1.5 : ca > cb + 1.5) verdict.push(`${esc(short((leader[0] === a ? pb : pa).n))} has the higher ceiling, so he's the swing if you need a big game.`);
+  // Background, only when there is something to say. Our stat model's two reasons the players differ, and whether the independent sources agree.
+  if (A.parts && B.parts && A.base != null && B.base != null) {
+    const form = (A.base + A.parts.usage) * (A.lscale || 1) - (B.base + B.parts.usage) * (B.lscale || 1), env = (C.mu?.[a]?.pts ?? NaN) - (C.mu?.[b]?.pts ?? NaN), nm2 = (v) => esc(short((v > 0 ? pa : pb).n));
+    if (isFinite(env) && (Math.abs(form) >= 0.5 || Math.abs(env) >= 0.5)) verdict.push(`Our stat model: ${Math.abs(form) < 0.5 ? "recent form and workload are even" : `recent form and workload favor ${nm2(form)} by ${Math.abs(form).toFixed(1)}`}; ${Math.abs(env) < 0.5 ? "the matchup and game are even" : `the matchup and game favor ${nm2(env)} by ${Math.abs(env).toFixed(1)}`}.`);
+  }
+  { const want = [["model", "Our model"], ["experts", "The experts"], ["sleeper", "Sleeper"]], votes = [];
+    for (const [k, label] of want) { const P = withSource(C.P0, k), x = P.proj[a], y = P.proj[b]; if (!x || !y || x.srcMissing || y.srcMissing || Math.abs(x.mean - y.mean) < 0.05) continue; votes.push([label, x.mean > y.mean ? a : b]); }
+    if (votes.length >= 2) { const forA = votes.filter(([, w]) => w === a).map(([l]) => l), forB = votes.filter(([, w]) => w === b).map(([l]) => l), list = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : xs[0]);
+      const verb = (xs) => (xs.length > 1 || xs[0] === "The experts" ? "favor" : "favors"), lc = (s) => s.replace(/^The /, "the "), all = votes.map(([l]) => l);
+      verdict.push(forA.length && forB.length ? `${list(forA)} ${verb(forA)} ${esc(short(pa.n))}; ${lc(list(forB))} ${verb(forB)} ${esc(short(pb.n))}.` : `${votes.length === 3 ? "All three sources" : list(all)} ${votes.length === 3 ? "favor" : verb(all)} ${esc(short((forA.length ? pa : pb).n))}.`); } }
+  // Only stats that mean something for the positions being compared (a row must apply to both).
+  const BASE = ["Projection", "Bad week", "Great week", "Team points", "Matchup & game", "Recent avg", "Expert rank"], REL = { QB: [...BASE, "Carries/game", "EPA/dropback", "CPOE", "EPA/carry"], RB: [...BASE, "Carries/game", "Targets/game", "Target share", "EPA/carry", "EPA/target", "Catch rate"], WR: [...BASE, "Targets/game", "Target share", "WOPR", "Air yards share", "Depth of target", "YAC/catch", "EPA/target", "Catch rate"] }; REL.TE = REL.WR;
+  rows.splice(0, rows.length, ...rows.filter((r) => (REL[pa.p] || BASE).includes(r.label) && (REL[pb.p] || BASE).includes(r.label) && !(r.label === "Matchup & game" && (r.a == null || r.b == null))));
   // Each bar is measured against this week's best at the position(s) being compared, with a tick for a typical starter (the last starter league-wide).
   const xpool = Object.keys(C.P.proj).filter((id) => [pa.p, pb.p].includes(pl(id)?.p) && C.P.proj[id].mean > 0);
   const xk = Math.max(1, (S.profile?.leagues?.find((l) => l.id === S.profile.active)?.teams || 12) * (["RB", "WR"].includes(pa.p) ? 2 : 1));
   const xmetric = { "Projection": (id) => C.P.proj[id].mean, "Bad week": (id) => quantile(C.P.proj[id], 0.1), "Great week": (id) => quantile(C.P.proj[id], 0.9), "Team points": (id) => C.P.proj[id].implied, "Recent avg": (id) => u(id)?.form,
-    "Targets/game": (id) => u(id)?.tgt, "Target share": (id) => u(id)?.ts, "Carries/game": (id) => u(id)?.car, "Expert rank": (id) => C.ranks.exp[id] };
+    "Matchup & game": (id) => C.mu?.[id]?.pts, "Targets/game": (id) => u(id)?.tgt, "Target share": (id) => u(id)?.ts, "Carries/game": (id) => u(id)?.car, "Expert rank": (id) => C.ranks.exp[id] };
   for (const r of rows) {
     const f = r.adv ? (id) => (u(id)?.adv?.g >= 2 ? u(id).adv[r.adv] : null) : xmetric[r.label]; if (!f) continue;
     const vals = xpool.map(f).filter((v) => typeof v === "number" && isFinite(v)).sort((x, y) => y - x); if (vals.length < 3) continue;

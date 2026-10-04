@@ -4,7 +4,7 @@ const POS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
 // Sleeper asks that the full player dump be pulled at most once a day, so it is cached for 20 hours.
 export async function loadPlayers() {
-  return cached("players-v2", 20 * 3600e3, async () => {
+  return cached("players-v2", 24 * 3600e3, async () => {
     const raw = await sleeper("players/nfl");
     const out = {};
     for (const [id, p] of Object.entries(raw)) {

@@ -93,3 +93,32 @@ export function normName(n) {
     .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, "")
     .replace(/[^a-z]/g, "");
 }
+
+// Ask the host whether a file changed since we last saw it. A 304 costs a few hundred bytes instead of the whole file, and the parse is skipped too.
+// 404 means "not published yet" (a new season's stats file before its first week), which is not an error.
+export async function getTextConditional(url, etag, { timeout = 20000 } = {}) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(timeout), headers: etag ? { "if-none-match": etag } : {} });
+  if (r.status === 304) return { notModified: true };
+  if (r.status === 404) return { missing: true };
+  if (!r.ok) throw new Error(`${new URL(url).host} returned ${r.status}`);
+  return { text: await r.text(), etag: r.headers.get("etag") || null };
+}
+
+// Like cached(), but when the data is older than maxAgeMs it first asks whether the source changed. fetcher(etag) returns one of:
+//   { notModified: true }   keep what we have, and count it as checked now
+//   { missing: true }       not published yet; nothing is stored, so the next call asks again
+//   { data, etag }          new data
+// A failed check never throws away data we already have. The data itself is rewritten only when it changed; "checked at" is a small separate record.
+export async function cachedConditional(key, maxAgeMs, fetcher, { empty = [] } = {}) {
+  let s = null; try { s = store("cache"); } catch {}
+  let hit = null, chk = null;
+  try { if (s) { hit = await s.get(key, { type: "json" }); chk = await s.get(`${key}:chk`, { type: "json" }); } } catch {}
+  if (hit && Date.now() - Math.max(hit.at || 0, chk?.at || 0) < maxAgeMs) return hit.data;
+  let r;
+  try { r = await fetcher(hit?.etag || null); if (r.notModified && !hit) r = await fetcher(null); }
+  catch (e) { if (hit) return hit.data; throw e; }
+  if (r.notModified) { try { if (s) await s.setJSON(`${key}:chk`, { at: Date.now() }); } catch {} return hit.data; }
+  if (r.missing) return hit ? hit.data : empty;
+  try { if (s) { await s.setJSON(key, { at: Date.now(), data: r.data, etag: r.etag || null }); await s.setJSON(`${key}:chk`, { at: Date.now() }); } } catch {}
+  return r.data;
+}
