@@ -1,4 +1,4 @@
-import { points, PPR, SLOT_ELIG } from "./scoring.js";
+import { points, PPR, SLOT_ELIG, SLOT_LABEL } from "./scoring.js";
 import { STUDY, pairCorr } from "./research.js";
 import { makeRow, project, gameMap, teamContext, defenseStats, kickerStats, availability, availMult, minsTo, invNorm, xppr } from "./model.js";
 export { invNorm };
@@ -259,19 +259,39 @@ export function tradeValue(id, ctx, league, R, repl) {
   return rosVor + (league.type === "dynasty" ? futVor : league.type === "keeper" ? 0.35 * futVor : 0);
 }
 
-function lineupStrength(roster, league, ctx, R) {
-  return optimal(roster, league.slots, (id) => R[id]?.per || 0, (id) => ctx.players[id]?.p).total;
+// A lineup slot nobody on the roster can fill is filled from the waiver wire, at the level of the best free agent at that position, so giving up depth or a
+// starter is scored against what you could really do instead of against zero. Free agents are virtual players with ids like "__fa:TE:0".
+const FA = "__fa:";
+export const isFreeAgentId = (id) => typeof id === "string" && id.startsWith(FA);
+const faPos = (id) => id.slice(FA.length).split(":")[0];
+function withFreeAgents(roster, league, repl) {
+  if (!repl) return roster;
+  const extra = []; for (const pos of Object.keys(repl)) if (repl[pos] > 0) for (let i = 0; i < league.slots.length; i++) extra.push(`${FA}${pos}:${i}`);
+  return [...roster, ...extra];
+}
+function strengthOf(roster, league, ctx, R, repl) {
+  return optimal(withFreeAgents(roster, league, repl), league.slots, (id) => (isFreeAgentId(id) ? repl[faPos(id)] : R[id]?.per || 0), (id) => (isFreeAgentId(id) ? faPos(id) : ctx.players[id]?.p));
+}
+function lineupStrength(roster, league, ctx, R, repl) { return strengthOf(roster, league, ctx, R, repl).total; }
+// The starting lineup and bench the trade math uses, free agents included in the starters (marked by isFreeAgentId), never on the bench.
+export function lineupOf(roster, league, ctx, R, repl) { const r = strengthOf(roster, league, ctx, R, repl); return { starters: r.starters, bench: r.bench.filter((id) => !isFreeAgentId(id)), total: r.total }; }
+export const freeAgentPos = faPos;
+// Slot by slot, how much better (per game) a lineup gets, biggest first.
+export function lineupChanges(ctx, league, R, repl, before, after) {
+  const a = strengthOf(before, league, ctx, R, repl).starters, b = strengthOf(after, league, ctx, R, repl).starters, out = [];
+  for (let k = 0; k < a.length; k++) { const d = (b[k]?.v || 0) - (a[k]?.v || 0); if (Math.abs(d) >= 0.05) out.push({ slot: a[k].slot, d, before: a[k].id, after: b[k]?.id }); }
+  return out.sort((x, y) => y.d - x.d);
 }
 
 export function evaluateTrade(ctx, league, R, repl, myRoster, give, get, theirRoster = null) {
   const val = (ids) => ids.reduce((t, id) => t + tradeValue(id, ctx, league, R, repl), 0);
   const weeks = Math.max(1, Math.max(...Object.values(R).map((v) => v.games), 1));
-  const before = lineupStrength(myRoster, league, ctx, R);
-  const after = lineupStrength([...myRoster.filter((x) => !give.includes(x)), ...get], league, ctx, R);
+  const before = lineupStrength(myRoster, league, ctx, R, repl);
+  const after = lineupStrength([...myRoster.filter((x) => !give.includes(x)), ...get], league, ctx, R, repl);
   let theirs = null;
   if (theirRoster) {
-    const tb = lineupStrength(theirRoster, league, ctx, R);
-    const ta = lineupStrength([...theirRoster.filter((x) => !get.includes(x)), ...give], league, ctx, R);
+    const tb = lineupStrength(theirRoster, league, ctx, R, repl);
+    const ta = lineupStrength([...theirRoster.filter((x) => !get.includes(x)), ...give], league, ctx, R, repl);
     theirs = (ta - tb) * weeks;
   }
   return { giveValue: val(give), getValue: val(get), lineupGain: (after - before) * weeks, theirLineupGain: theirs, weeks };
@@ -294,16 +314,21 @@ export function waiverLevel(ctx, league, R, fallback) {
 // Realistic only: a swap is kept when the two sides are close in value (within about 30%, or 15 points for small values), or when it
 // improves both lineups at a not-absurd price (within a factor of two). Similar value comes first, then lineup help.
 export function focusedTrades(ctx, league, R, repl, side, ids, others) {
-  const rows = [], mine = league.roster.filter((id) => R[id] && ctx.players[id]?.p !== "K" && ctx.players[id]?.p !== "DEF");
+  const rows = [], okId = (id) => R[id] && ctx.players[id]?.p !== "K" && ctx.players[id]?.p !== "DEF", tv = (id) => tradeValue(id, ctx, league, R, repl);
+  const options = (pool) => { const top = pool.filter(okId).filter((id) => tv(id) > 0).sort((a, b) => tv(b) - tv(a)).slice(0, 10); return [...pool.filter(okId).map((id) => [id]), ...top.flatMap((x, i) => top.slice(i + 1).map((y) => [x, y]))]; };   // one player, or a pair of the best ten
   for (const x of ids) {
     if (side === "get") { const team = others.find((o) => o.roster.includes(x)); if (!team) continue;
-      for (const a of mine) rows.push({ team: team.name, teamId: team.id, give: [a], get: [x], ...evaluateTrade(ctx, league, R, repl, league.roster, [a], [x], team.roster) }); }
-    else for (const team of others) for (const b of team.roster) if (R[b]) rows.push({ team: team.name, teamId: team.id, give: [x], get: [b], ...evaluateTrade(ctx, league, R, repl, league.roster, [x], [b], team.roster) });
+      for (const give of options(league.roster)) rows.push({ team: team.name, teamId: team.id, give, get: [x], ...evaluateTrade(ctx, league, R, repl, league.roster, give, [x], team.roster) }); }
+    else for (const team of others) for (const get of options(team.roster)) rows.push({ team: team.name, teamId: team.id, give: [x], get, ...evaluateTrade(ctx, league, R, repl, league.roster, [x], get, team.roster) });
   }
-  const tagged = rows.map((r) => { const hi = Math.max(r.giveValue, r.getValue), gap = Math.abs(r.giveValue - r.getValue), similar = gap <= Math.max(15, 0.3 * hi), mutual = r.lineupGain > 1 && r.theirLineupGain > 0.5, price = hi > 0 && Math.min(r.giveValue, r.getValue) >= 0.5 * hi;
-    return { ...r, similar, mutual, why: similar && mutual ? "similar value, helps both" : similar ? "similar value" : "helps both teams", keep: similar || (mutual && price), closeness: 1 - gap / Math.max(1, hi) }; });
-  return tagged.filter((r) => r.keep).sort((a, b) => (b.similar && b.mutual) - (a.similar && a.mutual) || b.similar - a.similar || b.closeness + 0.02 * b.lineupGain - (a.closeness + 0.02 * a.lineupGain)).slice(0, 6);
+  const tagged = rows.map((r) => { const hi = Math.max(r.giveValue, r.getValue), gap = Math.abs(r.giveValue - r.getValue), similar = gap <= Math.max(15, 0.3 * hi), mutual = r.lineupGain > 1 && r.theirLineupGain > 0.5, price = hi > 0 && Math.min(r.giveValue, r.getValue) >= 0.5 * hi, size = r.give.length + r.get.length;
+    return { ...r, size, kind: kindOf(r.give.length, r.get.length), similar, mutual, why: similar && mutual ? "similar value, helps both" : similar ? "similar value" : "helps both teams", keep: similar || (mutual && price), closeness: 1 - gap / Math.max(1, hi) - 0.04 * (size - 2) }; });
+  // a pair is only worth showing when neither player alone would already be a realistic offer (no throw-ins)
+  const byKey = new Map(tagged.map((r) => [`${r.teamId}|${r.give}|${r.get}`, r]));
+  const lean = tagged.filter((r) => { if (r.size <= 2) return true; const subs = [...(r.give.length > 1 ? r.give.map((g) => [r.give.filter((z) => z !== g), r.get]) : []), ...(r.get.length > 1 ? r.get.map((g) => [r.give, r.get.filter((z) => z !== g)]) : [])]; return !subs.some(([a, b]) => byKey.get(`${r.teamId}|${a}|${b}`)?.keep); });
+  return lean.filter((r) => r.keep).sort((a, b) => (b.similar && b.mutual) - (a.similar && a.mutual) || b.similar - a.similar || b.closeness + 0.02 * b.lineupGain - (a.closeness + 0.02 * a.lineupGain)).slice(0, 6);
 }
+const kindOf = (g, t) => (g === 1 && t === 1 ? "swap" : g === 2 && t === 1 ? "consolidate" : g === 1 && t === 2 ? "depth" : "package");
 
 export function tradeReport(ctx, league, R, repl, myRoster, others) {
   const all = [], near = [], stats = { teams: 0, pairs: 0, samePos: 0, noGainYou: 0, noGainThem: 0, lopsided: 0 };
@@ -453,4 +478,59 @@ export function matchupStrength(ctx, P) {
   for (const [id, m] of Object.entries(out)) { const peers = by[m.pos]; if (peers.length < 8) { Object.assign(m, { pct: null, tone: "n", word: "Neutral", lvl: 3 }); continue; }
     const pct = Math.round((100 * peers.filter((v) => v < m.pts).length) / peers.length), t = TONE.find(([c]) => pct >= c); Object.assign(m, { pct, tone: t[1], word: t[2], lvl: t[3] }); }
   return out;
+}
+
+// The trade board: the best distinct ideas across one-for-one swaps and packages of up to two players each way. A package must be minimal (take either
+// player out of it and it stops working), so nothing is a throw-in. Every idea improves both lineups, scored with waiver backfill, at a fair price.
+// Ranked by your gain plus half of theirs (simpler trades first on a tie), then thinned so one player is not offered five ways.
+function boardRun(ctx, league, R, repl, myRoster, others, max) {
+  const posOf = (id) => ctx.players[id]?.p, tv = (id) => tradeValue(id, ctx, league, R, repl), okId = (id) => R[id] && posOf(id) !== "K" && posOf(id) !== "DEF";
+  const top = (ids, n) => ids.filter(okId).map((id) => [id, tv(id)]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, n).map(([id]) => id);
+  const subsets = (arr, k) => (k === 1 ? arr.map((x) => [x]) : arr.flatMap((x, i) => arr.slice(i + 1).map((y) => [x, y])));
+  const window = (g, t) => (g * t === 1 ? [0.7, 1.45] : [0.75, 1.35]), sum = (ids) => ids.reduce((t, id) => t + tv(id), 0);
+  const stats = { teams: 0, packages: 0, found: 0 }, cands = [], mine = top(myRoster, 9);
+  const forTeam = (team) => {
+    const theirs = top(team.roster || [], 9); stats.teams++;
+    const good = (give, get) => { const [lo, hi] = window(give.length, get.length), f = sum(give) / Math.max(1, sum(get)); if (!(f > lo && f < hi)) return null; const ev = evaluateTrade(ctx, league, R, repl, myRoster, give, get, team.roster); return ev.lineupGain > 1 && ev.theirLineupGain > 0.5 ? ev : null; };
+    for (const [g, t] of [[1, 1], [2, 1], [1, 2], [2, 2]]) for (const give of subsets(mine, g)) for (const get of subsets(theirs, t)) {
+      if (g === 1 && t === 1 && posOf(give[0]) === posOf(get[0])) continue;          // same-position one-for-ones rarely fix a need
+      if (g * t > 1) stats.packages++;
+      const ev = good(give, get); if (!ev) continue;
+      if (g * t > 1) { const subs = [...(g > 1 ? give.map((x) => [give.filter((z) => z !== x), get]) : []), ...(t > 1 ? get.map((x) => [give, get.filter((z) => z !== x)]) : [])]; if (subs.some(([a, b]) => good(a, b))) continue; }
+      cands.push({ team: team.name, teamId: team.id, give, get, ...ev, kind: kindOf(g, t), size: g + t, theirRoster: team.roster, score: (ev.lineupGain + 0.5 * ev.theirLineupGain) * (1 - 0.08 * (g + t - 2)) });
+    }
+  };
+  const finish = () => {
+  stats.found = cands.length; cands.sort((a, b) => b.score - a.score);
+  const usedGive = {}, usedGet = {}, perTeam = {}, picked = [];
+  for (const c of cands) {
+    if (picked.length >= max) break;
+    if (c.give.some((id) => (usedGive[id] || 0) >= 2) || c.get.some((id) => (usedGet[id] || 0) >= 1) || (perTeam[c.teamId] || 0) >= 3) continue;
+    if (picked.some((p) => p.teamId === c.teamId && p.give.some((id) => c.give.includes(id)) && p.get.some((id) => c.get.includes(id)))) continue;   // a variant of one already shown
+    picked.push(c); c.give.forEach((id) => (usedGive[id] = (usedGive[id] || 0) + 1)); c.get.forEach((id) => (usedGet[id] = (usedGet[id] || 0) + 1)); perTeam[c.teamId] = (perTeam[c.teamId] || 0) + 1;
+  }
+  const label = (slot) => SLOT_LABEL[slot] || slot, part = (ch) => ch.filter((x) => x.d >= 0.2).slice(0, 2).map((x) => `${label(x.slot)} +${x.d.toFixed(1)}`).join(", ");
+  const ideas = picked.map((c) => { const mineAfter = [...myRoster.filter((x) => !c.give.includes(x)), ...c.get], theirAfter = [...c.theirRoster.filter((x) => !c.get.includes(x)), ...c.give];
+    const you = lineupChanges(ctx, league, R, repl, myRoster, mineAfter), they = lineupChanges(ctx, league, R, repl, c.theirRoster, theirAfter);
+    const fills = you.some((x) => isFreeAgentId(x.before) && !isFreeAgentId(x.after) && x.d >= 0.5);
+    const { theirRoster, ...rest } = c; return { ...rest, board: true, why: `You: ${part(you) || `+${(c.lineupGain / c.weeks).toFixed(1)}`} · They: ${part(they) || `+${(c.theirLineupGain / c.weeks).toFixed(1)}`} a week`, fills }; });
+  return { ideas, stats };
+  };
+  return { forTeam, finish };
+}
+export function tradeBoard(ctx, league, R, repl, myRoster, others, { max = 8 } = {}) { const b = boardRun(ctx, league, R, repl, myRoster, others, max); for (const team of others) b.forTeam(team); return b.finish(); }
+// The same board, computed one team at a time with a breath between, so the screen stays responsive on a phone.
+export async function tradeBoardAsync(ctx, league, R, repl, myRoster, others, { max = 8 } = {}) { const b = boardRun(ctx, league, R, repl, myRoster, others, max); for (const team of others) { b.forTeam(team); await new Promise((r) => setTimeout(r, 0)); } return b.finish(); }
+
+
+// Who is running hot or cold: recent points a game against what his workload usually produces. The same lists as the Hot and cold tab.
+export function heat(usage, players) {
+  const rows = [];
+  for (const [id, u] of Object.entries(usage?.players || {})) {
+    if (!["RB", "WR", "TE"].includes(u.p) || u.g < 3 || u.form < 6 || !players?.[id]?.t) continue;
+    const x = xppr(u.p, u.tgt, u.car); if (x == null) continue;
+    rows.push({ id, u, x, gap: u.form - x });
+  }
+  const hot = [...rows].sort((a, b) => b.gap - a.gap).slice(0, 8), cold = [...rows].sort((a, b) => a.gap - b.gap).slice(0, 8);
+  return { rows, hot, cold, hotIds: new Set(hot.map((r) => r.id)), coldIds: new Set(cold.map((r) => r.id)) };
 }

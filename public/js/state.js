@@ -89,7 +89,17 @@ export async function loadData() {
     } catch (e) { S.errors[k] = e.message; }
     invalidate(); if (S.players) render();
   })]);
-  S.loading = false; render();
+  S.loading = false; S.sharedAt = Date.now(); render();
+}
+
+// The player table (statuses), game logs, schedule and accuracy are read when the app starts. Re-read them quietly every couple of hours while it stays open,
+// so a long-open app does not keep yesterday's injury statuses or last week's stats. Nothing redraws unless something actually changed.
+export async function refreshSharedQuiet() {
+  let changed = false;
+  await Promise.all(Object.entries({ players: "players", usage: "usage", outlook: "outlook", acc: "accuracy" }).map(async ([k, path]) => {
+    try { const v = await api(path, { auth: false }); if (JSON.stringify(v) !== JSON.stringify(S[k])) { S[k] = v; changed = true; } delete S.errors[k]; } catch { /* keep what is on screen */ }
+  }));
+  S.sharedAt = Date.now(); if (changed) { invalidate(); render(); } return changed;
 }
 
 // Save the profile (debounced by api.js) and redraw.

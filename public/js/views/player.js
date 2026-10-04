@@ -1,4 +1,4 @@
-import { ADV, ADV_BY_POS, peerList, gradeOf } from "./advstats.js";
+import { ADV, ADV_BY_POS, peerList, gradeOf, rankLabel, whyNot, whyShort } from "./advstats.js";
 import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
@@ -140,9 +140,12 @@ function notesSection(id, C) {
 // words and color whether it is good: a meter filled to his percentile, a one-word grade, and the number in the grade's color. Tapping a tile opens the rankings.
 function advSection(id, p) {
   const adv = S.usage?.players?.[id]?.adv; if (!adv || !adv.g || !ADV_BY_POS[p.p]) return "";
-  const tiles = ADV_BY_POS[p.p].filter((k) => adv[k] != null).map((k) => { const m = ADV[k], v = adv[k], vals = peerList(S.usage, p.p, k).map((x) => x.v), { pct, word, tone } = gradeOf(v, vals, m.kind);
-    const aria = `${m.label}: ${m.fmt(v)}. ${pct != null ? `${word}, better than ${pct}% of ${posLabel(p.p)}s.` : "Not enough players to rank yet."} Open the ${posLabel(p.p)} rankings.`;
-    return `<a class="tile tone-${tone}" data-tone="${tone}" href="#stat/${p.p}/${k}/${id}" aria-label="${esc(aria)}"><span class="chev" aria-hidden="true">›</span><span class="num">${m.fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(`${word}: better than ${pct}% of ${posLabel(p.p)}s`)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(m.label)}<br>${pct != null ? `<b>${word}</b> · better than ${pct}% of ${posLabel(p.p)}s` : "not enough players to rank yet"}</small></a>`; }).join("");
+  const me = S.usage.players[id], plural = `${posLabel(p.p)}s`;
+  const tiles = ADV_BY_POS[p.p].filter((k) => adv[k] != null).map((k) => { const m = ADV[k], v = adv[k], vals = peerList(S.usage, p.p, k).map((x) => x.v), why = whyNot(S.usage, p.p, k, me), { pct, word, tone } = why ? { pct: null, word: "", tone: "n" } : gradeOf(v, vals, m.kind);
+    const rk = pct != null ? rankLabel(v, vals) : null, n = vals.length;
+    const aria = `${m.label}: ${m.fmt(v)}. ${why ? `Not ranked yet: ${whyShort(why)}.` : pct != null ? `${m.kind === "style" ? word : `${word}.`} Ranked ${rk} of ${n} ${plural}.` : "Not enough players to rank yet."} Open the ${posLabel(p.p)} rankings.`;
+    const line = why ? (why.kind === "games" ? `<b>Too early</b> · ${whyShort(why)}, not ranked yet` : `<b>Not ranked</b> · ${whyShort(why)} (needs ${why.need})`) : pct != null ? `<b>${word}</b> · #${rk} of ${n} ${plural}` : "not enough players to rank yet";
+    return `<a class="tile tone-${tone}" data-tone="${tone}" ${rk ? `data-rank="${rk}" data-of="${n}"` : ""} href="#stat/${p.p}/${k}/${id}" aria-label="${esc(aria)}"><span class="chev" aria-hidden="true">›</span><span class="num">${m.fmt(v)}</span>${pct != null ? `<span class="meter" role="img" aria-label="${esc(`${word}: ranked ${rk} of ${n} ${plural}`)}"><i style="width:${Math.max(3, pct)}%"></i></span>` : ""}<small>${esc(m.label)}<br>${line}</small></a>`; }).join("");
   return tiles ? sec("Usage and efficiency", `<div class="stat3">${tiles}</div><p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Green is better than most ${posLabel(p.p)}s, <span class="key tone-n"></span>gray is about average, <span class="key tone-b2"></span>red is worse. Tap a stat to see where he ranks. This season, ${adv.g} ${adv.g === 1 ? "game" : "games"}; early on these move a lot. EPA is expected points added per play, from nflverse.</p>`, `${adv.g} ${adv.g === 1 ? "game" : "games"}`) : "";
 }
 

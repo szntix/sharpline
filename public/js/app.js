@@ -1,7 +1,7 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
+import { refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -58,6 +58,9 @@ function render() {
   if (!S.user) return;
   const active = document.activeElement, fid = active?.id, sel = active?.selectionStart, y = window.scrollY;
   S.route = parseRoute();
+  // Opening Moves from another screen starts the trade calculator fresh and open to anyone, not on the last partner. Staying on the screen keeps your work.
+  if (S.route.name === "moves" && S.ui.lastRoute && S.ui.lastRoute !== "moves") { S.ui.partner = ""; S.ui.give = []; S.ui.get = []; }
+  S.ui.lastRoute = S.route.name;
   const { name, args } = S.route;
   let body = "";
   try {
@@ -126,6 +129,7 @@ function autoRefresh() {
   if (!S.user || !S.feed || S.loading || document.hidden || dragging) return;
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
   ensureRosters(10 * 60e3);
+  if (Date.now() - (S.sharedAt || 0) > 2 * 3600e3 && !S._sharedBusy) { S._sharedBusy = true; S._keepScroll = true; refreshSharedQuiet().finally(() => { S._sharedBusy = false; S._keepScroll = false; }); }
   if (Date.now() - (S.feedAt || 0) < nextRefreshMs(S.feed)) return;
   S._keepScroll = true; refreshFeedQuiet().finally(() => { S._keepScroll = false; });
 }
@@ -193,7 +197,7 @@ $app.addEventListener("click", async (e) => {
     case "pick-cmp": { const i = S.ui.pick.indexOf(id); if (i >= 0) S.ui.pick.splice(i, 1); else { if (S.ui.pick.length >= 2) S.ui.pick.shift(); S.ui.pick.push(id); } render(); break; }
     case "cmp-go": { const [x, y] = S.ui.pick; S.ui.pick = []; location.hash = `compare/${x}/${y}`; break; }
     case "cmp-clear": S.ui.pick = []; render(); break;
-    case "moves-tab": S.ui.moves = v; render(); break;
+    case "moves-tab": if (v === "trades" && S.ui.moves !== "trades") { S.ui.partner = ""; S.ui.give = []; S.ui.get = []; } S.ui.moves = v; render(); break;
     case "st-filter": S.ui.plFilter = v; render(); break;
     case "proof-pos": S.ui.proofPos = v; render(); break;
     case "theme": localStorage.setItem("sharpline.theme", v); applyTheme(); render(); break;

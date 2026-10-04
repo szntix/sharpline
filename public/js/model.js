@@ -48,7 +48,9 @@ export const gameMap = (feed) => { const m = {}; for (const g of feed?.games || 
 
 const HARD_OUT = ["Out", "IR", "PUP", "Sus", "NA", "COV"];
 export function availability(sleeperStatus, official) {
-  if (["IR", "PUP", "Sus", "NA", "COV"].includes(sleeperStatus)) return { status: sleeperStatus, practice: official?.p || null, injury: official?.i || null, official: false };
+  // Sleeper's list can lag by a day. A game-day designation of Questionable or Doubtful only exists for a player on the active roster, so it outranks a stale IR-type tag.
+  const activeDesignation = !!official && (official.s === "Questionable" || official.s === "Doubtful");
+  if (["IR", "PUP", "Sus", "NA", "COV"].includes(sleeperStatus) && !activeDesignation) return { status: sleeperStatus, practice: official?.p || null, injury: official?.i || null, official: false };
   if (official && (official.s || official.p)) return { status: official.s || null, practice: official.p || null, injury: official.i || null, official: !!official.s };
   return { status: sleeperStatus && sleeperStatus !== "Healthy" ? sleeperStatus : null, practice: null, injury: null, official: false };
 }

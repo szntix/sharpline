@@ -28,7 +28,9 @@ function advanced(now) {
   const [att, sk, pepa, , rec, ray, yac, repa, rushepa, ays, wopr, pfd, rfd, refd] = t, k = (v, d) => +v.toFixed(d);
   return { g, epaDb: att + sk >= 20 ? k(pepa / (att + sk), 3) : null, cpoe: att >= 20 ? k(cpoeW / att, 1) : null, rushEpa: cr >= 10 ? k(rushepa / cr, 3) : null,
     recEpa: tg >= 6 ? k(repa / tg, 3) : null, adot: tg >= 6 ? k(ray / tg, 1) : null, yac: rec >= 4 ? k(yac / rec, 1) : null, catchRate: tg >= 6 ? k(rec / tg, 3) : null,
-    ays: k(ays / g, 3), wopr: k(wopr / g, 3), fd: k((pfd + rfd + refd) / g, 1) };
+    ays: k(ays / g, 3), wopr: k(wopr / g, 3), fd: k((pfd + rfd + refd) / g, 1),
+    // Season totals of the plays behind these rates, so a ranking can require real volume (the NFL's own leaderboard minimums) and not just two games.
+    vol: { db: att + sk, car: cr, tgt: tg, rec } };
 }
 // The fetcher cachedConditional wants: unchanged (304), not published yet (404), or the parsed rows with the file's ETag.
 const rowsFetcher = (season) => async (etag) => {
@@ -61,7 +63,7 @@ export function ewmaNext(values, mu, half = MODEL.halfLife, w0 = MODEL.priorWeig
 }
 
 export async function computeUsage() {
-  return cached("usage-v4", 60 * 60e3, async () => {
+  return cached("usage-v5", 60 * 60e3, async () => {
     const state = await nflState(); const season = Number(state.season);
     const [prev, cur, players] = await Promise.all([
       cachedConditional(`rows2-${season - 1}`, 30 * 864e5, rowsFetcher(season - 1)).catch(() => []),
