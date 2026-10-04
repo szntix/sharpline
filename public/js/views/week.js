@@ -1,8 +1,8 @@
-import { SOURCES, S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
+import { withSource, SOURCES, S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
 import { optimal, matchup, bestBallExpectation, lineupNotes } from "../engine.js";
 import { esc, f1, f0, pct, ago, posLabel } from "../ui.js";
 import { drive } from "../charts.js";
-import { srcBar, pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
+import { pulse, expertsNote, loading, feedError, prow, emptyLeague, sec, noteList } from "./shared.js";
 import { SLOT_LABEL } from "../scoring.js";
 
 const title = () => `Week ${S.feed?.week ?? S.week ?? ""}`;
@@ -45,7 +45,7 @@ export function viewWeek() {
   const bench = benchIds.map((id) => prow(id, C, { sig: true, dim: true })).join("");
   return `${feedError()}${hero}${pulse(S.feed)}${expertsNote(S.feed)}<div class="stack" style="margin-top:14px">${swap}</div>
     ${notes.length ? sec("Things to know", noteList(notes)) : ""}
-    ${srcPanel(L, C)}
+    ${sourcesPanel(L, C)}
     ${sec("Starters", `<div class="list">${starters}</div>`, `${f1(m.best.total)} projected`)}
     ${sec("Bench", `<div class="list">${bench || `<div class="row"><div></div><div class="muted">No bench players.</div></div>`}</div>`, L.sleeper ? "" : `<button class="link" data-act="edit-roster" data-id="${L.id}">Edit roster</button>`)}`;
 }
@@ -68,12 +68,13 @@ function welcome(C) {
     ${pulse(feed)}${expertsNote(feed)}${sec("Best plays this week", `<div class="list">${ids.map((id) => prow(id, C)).join("")}</div>`)}`;
 }
 
-function srcPanel(L, C) {
-  const head = `<div style="margin:4px 0 14px"><div class="small muted" style="margin-bottom:6px">Projections from</div>${srcBar()}</div>`;
-  if (S.ui.src === "blend") return head;
-  const posOf = (id) => S.players[id]?.p, by = (P) => (id) => P.proj[id]?.mean || 0;
-  const a = optimal(L.roster, L.slots, by(C.P), posOf), b = optimal(L.roster, L.slots, by(C.P0), posOf);
-  const diff = a.starters.map((s, i) => [s, b.starters[i]]).filter(([x, y]) => x.id !== y.id && x.id && y.id), miss = L.roster.filter((id) => C.P.proj[id]?.srcMissing && C.P0.proj[id]?.mean > 0).length;
-  const nm = (id) => S.players[id]?.n || id;
-  return head + `<div class="panel small" style="margin-bottom:14px">${diff.length ? `<b>${diff.length} ${diff.length === 1 ? "starter differs" : "starters differ"} from the Blended lineup.</b> ${diff.map(([x, y]) => `${x.slot}: ${nm(x.id)} instead of ${nm(y.id)}`).join("; ")}.` : "Same starters as the Blended lineup."}${miss ? ` ${miss} of your players have no ${SOURCES[S.ui.src]} number, so they keep the Blended one.` : ""}</div>`;
+// Every source's best lineup side by side, only where they disagree, and what each alternative gives up by the tested (Blended) numbers.
+function sourcesPanel(L, C) {
+  const posOf = (id) => S.players[id]?.p, last = (id) => (S.players[id]?.n || "").split(" ").slice(-1)[0], keys = Object.keys(SOURCES);
+  const blendMean = (id) => C.P0.proj[id]?.mean || 0;
+  const lineup = Object.fromEntries(keys.map((k) => { const P = withSource(C.P0, k); return [k, optimal(L.roster, L.slots, (id) => P.proj[id]?.mean || 0, posOf)]; }));
+  const rows = lineup.blend.starters.map((s, i) => ({ slot: s.slot, cells: keys.map((k) => lineup[k].starters[i]?.id || null) })).filter((r) => r.cells.some((c) => c !== r.cells[0]));
+  if (!rows.length) return sec("Lineup by source", `<p class="small muted">Blended, our model, the experts and Sleeper all start the same lineup this week.</p>`);
+  const cost = keys.map((k) => lineup[k].starters.reduce((t, s) => t + (s.id ? blendMean(s.id) : 0), 0) - lineup.blend.starters.reduce((t, s) => t + (s.id ? blendMean(s.id) : 0), 0));
+  return sec("Lineup by source", `<div style="overflow-x:auto"><table class="srct"><thead><tr><th></th>${keys.map((k) => `<th>${SOURCES[k]}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr><th>${esc(SLOT_LABEL[r.slot] || r.slot)}</th>${r.cells.map((c, i) => `<td class="${i && c !== r.cells[0] ? "diff" : ""}">${c ? esc(last(c)) : "–"}</td>`).join("")}</tr>`).join("")}<tr class="tot"><th>Cost</th>${cost.map((c, i) => `<td>${i ? (Math.abs(c) < 0.05 ? "same" : (c > 0 ? "+" : "−") + Math.abs(c).toFixed(1)) : "–"}</td>`).join("")}</tr></tbody></table></div><p class="small muted" style="margin-top:8px">Only slots where the sources disagree. The Cost row is what each source's lineup gives up by the Blended numbers, which tested most accurate. Change the numbers used everywhere in Settings.</p>`);
 }

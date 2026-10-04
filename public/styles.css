@@ -440,3 +440,18 @@ details > summary { cursor: pointer; }
 .panel details > summary { padding: 11px 0; cursor: pointer; }
 .mb .ref { position: absolute; top: 0; bottom: 0; width: 2px; margin: 0 -1px; background: var(--ink2); opacity: .75; }
 .dvp { border-collapse: collapse; width: 100%; font-size: 14px; } .dvp th, .dvp td { padding: 10px 8px; text-align: right; border-bottom: 1px solid var(--hair); } .dvp th:first-child { text-align: left; } .dvp thead th { color: var(--ink2); font-weight: 600; font-size: 13px; }
+
+/* Fields and dropdowns: 16px so iPhones do not zoom the page on focus, and one arrow drawn the same everywhere instead of each phone's own. */
+input, select, textarea { font-size: 16px; }
+select:not(.bsel select) { appearance: none; -webkit-appearance: none; padding-right: 38px; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 19px) 52%, calc(100% - 13px) 52%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+select:focus-visible, input:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.bsel { min-height: 44px; }
+.bsel .val { font-stretch: 75%; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+.bsel .val::after { content: "▾"; margin-left: 6px; font-size: 14px; opacity: .85; }
+.bsel::after { content: none; }
+.bsel select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+.srcstrip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 14px; min-height: 44px; margin: 0 0 12px; padding: 0 14px; border-radius: var(--r); background: var(--wash); font-size: 14px; }
+.srcstrip .srcact { display: inline-flex; gap: 14px; }
+.srct { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 13px; } .srct th, .srct td { padding: 10px 4px; text-align: center; border-bottom: 1px solid var(--hair); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srct th:first-child { width: 58px; text-align: left; font-weight: 700; } .srct thead th { color: var(--ink2); font-weight: 600; font-size: 12px; } .srct td { color: var(--ink2); } .srct td.diff { color: var(--ink); font-weight: 800; } .srct tr.tot th, .srct tr.tot td { border-bottom: 0; color: var(--ink2); font-size: 12px; }

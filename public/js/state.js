@@ -38,7 +38,7 @@ function rankTables(P, feed) {
 }
 // Which numbers drive the app. Blended is the tested default; the others swap in that source's own number (in your scoring) wherever it has one.
 export const SOURCES = { blend: "Blended", model: "Our model", experts: "Experts", sleeper: "Sleeper" };
-function withSource(P, src) {
+export function withSource(P, src) {
   if (!src || src === "blend") return P;
   const proj = {};
   for (const [id, x] of Object.entries(P.proj)) { const raw = src === "model" ? x.model : src === "experts" ? x.experts : x.sleeper, scale = x.ppr > 0 ? x.mean / x.ppr : null;

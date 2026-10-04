@@ -1,3 +1,4 @@
+import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
 import { SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
@@ -63,7 +64,7 @@ function render() {
   const wk = S.feed?.week ?? S.week, atNow = S.activeWeek == null || wk === S.activeWeek;
   $app.innerHTML = `<header class="top"><a class="brand" href="#week" aria-label="Sharpline home">${LOGO}<span>Sharpline</span></a>
       <div class="weeknav" role="group" aria-label="Week"><button data-act="wk-prev" aria-label="Previous week" ${!wk || wk <= 1 ? "disabled" : ""}>${ICON.prev}</button><b ${atNow ? "" : 'data-act="wk-now" style="cursor:pointer" title="Back to the current week"'}>${wk ? `Week ${wk}` : "…"}</b><button data-act="wk-next" aria-label="Next week" ${!wk || wk >= 18 ? "disabled" : ""}>${ICON.next}</button></div>
-      <a class="iconbtn" href="#leagues" aria-label="Leagues and settings">${ICON.leagues}</a></header>
+      <a class="iconbtn" href="#leagues" aria-label="Leagues and settings">${ICON.leagues}</a></header>${srcStrip()}
     <main><div class="wrap">${!atNow && S.feed ? `<div class="banner" style="margin:4px 0 12px">You're looking at week ${wk}. The current week is ${S.activeWeek}. <button class="link" data-act="wk-now">Go to week ${S.activeWeek}</button></div>` : ""}${body}</div></main>
     <nav class="tabs" aria-label="Sections">${TABS.map(([k, l]) => `<a href="#${k}" ${TAB_OF[name] === k ? 'aria-current="page"' : ""}>${ICON[k]}<span>${l}</span></a>`).join("")}</nav>`;
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch {} } }
@@ -238,7 +239,7 @@ $app.addEventListener("click", async (e) => {
 // ---------------------------------------------------------------- form changes and search
 $app.addEventListener("change", (e) => {
   const el = e.target, b = el.dataset.bind;
-  if (el.dataset.change === "pl-sort") { if (["proj", "model", "experts", "gap"].includes(el.value)) S.ui.plSort = el.value; render(); return; }
+  if (el.dataset.change === "pl-sort") { if (["proj", "experts", "gap"].includes(el.value)) S.ui.plSort = el.value; render(); return; }
   if (el.dataset.change === "pl-filter") { if (["all", "free", "mine"].includes(el.value)) S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
   if (!b) return;
   const L = league(), E = editingLeague();

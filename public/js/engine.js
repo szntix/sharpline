@@ -69,7 +69,7 @@ export function buildProjections(ctx, league) {
     const r = project(row, { sleeperShare: acc?.sleeperShare ?? undefined });
     const st = feed?.proj?.players?.[id] || null;
     const ls = r.kind === "none" ? 1 : lscaleFor(p.p, st, r.pre, s);
-    out[id] = { ...base, mean: +(r.mean * ls).toFixed(2), ppr: r.pre, lscale: ls, sd: r.sd * ls, kind: r.kind, src: bye ? "bye" : r.kind, status: row.status, practice: row.practice, injury: row.injury,
+    out[id] = { ...base, mean: +(r.mean * ls).toFixed(2), ppr: r.pre, lscale: ls, sd: r.sd * ls, kind: r.kind, roleUnclear: !!r.roleUnclear, src: bye ? "bye" : r.kind, status: row.status, practice: row.practice, injury: row.injury,
       model: r.model, base: r.base, parts: r.parts, experts: r.experts, sleeper: r.sleeper, weights: r.weights, cons: r.consensus != null ? r.consensus * ls : null, consensus: r.consensus, row, ecr: row.ecr };
   }
   return { proj: out, oppOf };
@@ -291,14 +291,18 @@ export function waiverLevel(ctx, league, R, fallback) {
 }
 
 // Suggestions for the player in the calculator: every one-for-one swap involving him, best for your lineup first.
+// Realistic only: a swap is kept when the two sides are close in value (within about 30%, or 15 points for small values), or when it
+// improves both lineups at a not-absurd price (within a factor of two). Similar value comes first, then lineup help.
 export function focusedTrades(ctx, league, R, repl, side, ids, others) {
-  const rows = [], mine = league.roster.filter((id) => R[id]);
+  const rows = [], mine = league.roster.filter((id) => R[id] && ctx.players[id]?.p !== "K" && ctx.players[id]?.p !== "DEF");
   for (const x of ids) {
     if (side === "get") { const team = others.find((o) => o.roster.includes(x)); if (!team) continue;
       for (const a of mine) rows.push({ team: team.name, teamId: team.id, give: [a], get: [x], ...evaluateTrade(ctx, league, R, repl, league.roster, [a], [x], team.roster) }); }
     else for (const team of others) for (const b of team.roster) if (R[b]) rows.push({ team: team.name, teamId: team.id, give: [x], get: [b], ...evaluateTrade(ctx, league, R, repl, league.roster, [x], [b], team.roster) });
   }
-  return rows.map((r) => ({ ...r, score: r.lineupGain + 0.5 * Math.max(0, r.theirLineupGain) })).sort((a, b) => b.score - a.score).slice(0, 6);
+  const tagged = rows.map((r) => { const hi = Math.max(r.giveValue, r.getValue), gap = Math.abs(r.giveValue - r.getValue), similar = gap <= Math.max(15, 0.3 * hi), mutual = r.lineupGain > 1 && r.theirLineupGain > 0.5, price = hi > 0 && Math.min(r.giveValue, r.getValue) >= 0.5 * hi;
+    return { ...r, similar, mutual, why: similar && mutual ? "similar value, helps both" : similar ? "similar value" : "helps both teams", keep: similar || (mutual && price), closeness: 1 - gap / Math.max(1, hi) }; });
+  return tagged.filter((r) => r.keep).sort((a, b) => (b.similar && b.mutual) - (a.similar && a.mutual) || b.similar - a.similar || b.closeness + 0.02 * b.lineupGain - (a.closeness + 0.02 * a.lineupGain)).slice(0, 6);
 }
 
 export function tradeReport(ctx, league, R, repl, myRoster, others) {

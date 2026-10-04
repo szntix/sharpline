@@ -119,7 +119,9 @@ function consensus(row, share = SLEEPER_SHARE) {
 
 export function project(row, { sleeperShare } = {}) {
   const M = MODEL.pos[row.pos];
-  const m = modelPPR(row), c = consensus(row, sleeperShare ?? SLEEPER_SHARE);
+  // Role check: the stat model reads past usage and cannot see who is starting now. When the experts project a player at less than half of
+  // the model's number, they know his role has changed (a backup whose history comes from old starts), so the model sits him out this week.
+  let m = modelPPR(row); const c = consensus(row, sleeperShare ?? SLEEPER_SHARE), roleUnclear = !!(m && c && c.pts < 0.5 * m.ppr); if (roleUnclear) m = null;
   let mean, kind, wM = 0, wE = 0;
   if (m && c && M) { wM = M.wModel; wE = M.wExperts; mean = wM * m.ppr + wE * c.pts; kind = "blend"; }
   else if (c) { mean = c.pts; kind = c.ecr != null ? "experts" : "sleeper"; wE = 1; }
@@ -130,7 +132,7 @@ export function project(row, { sleeperShare } = {}) {
   mean *= mult;
   const ab = (kind === "blend" || kind === "experts") && M?.sdBlend ? M.sdBlend : M?.sdModel || [3, 0.3, 1];
   const sd = Math.max(1, (ab[0] + ab[1] * Math.max(pre, 0.5)) * ab[2]);
-  return { kind, mean, pre, sd, model: m?.ppr ?? null, base: m?.base ?? null, parts: m?.parts ?? null, experts: c?.ecr ?? null, sleeper: c?.sleeper ?? row.sleeper ?? null,
+  return { kind, roleUnclear, mean, pre, sd, model: m?.ppr ?? null, base: m?.base ?? null, parts: m?.parts ?? null, experts: c?.ecr ?? null, sleeper: c?.sleeper ?? row.sleeper ?? null,
     consensus: c?.pts ?? null, weights: { model: wM, experts: wE }, mult };
 }
 

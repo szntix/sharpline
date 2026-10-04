@@ -62,6 +62,7 @@ export function viewPlayer(id) {
     if (!S.usage) return `Game logs are still loading, so for now this is ${base}.`;
     if (!u) return `Our stat model has nothing to work from because ${esc(pp.n)} could not be matched to his game logs, so this is ${base}.`;
     if (u.n < 3) return `Only ${u.n} game${u.n === 1 ? "" : "s"} logged for him, and our stat model needs 3, so this is ${base}.`;
+    if (q.roleUnclear) return `The experts project him well below his past usage, which usually means his role has changed (for example a backup whose history comes from old starts), so our stat model sits him out this week and this is ${base}.`;
     return `Our stat model has no number for him this week, so this is ${base}.`;
   }
   let built = "";

@@ -3,7 +3,7 @@ import { sleeperApi } from "../api.js";
 import { TYPE_HELP, SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
 import { VERSION, BUILT } from "../version.js";
 import { esc, uid, toast, ago } from "../ui.js";
-import { sec } from "./shared.js";
+import { SRC_HELP, srcBar, sec } from "./shared.js";
 
 export function newLeague(name = "My league") {
   return { id: uid(), name, type: "redraft", teams: 12, scoringPreset: "ppr", scoring: { ...SCORING_PRESETS.ppr.s }, rosterPreset: "standard", slots: [...ROSTER_PRESETS.standard.slots], bench: ROSTER_PRESETS.standard.bench,
@@ -65,7 +65,8 @@ function viewEditLeague(L) {
 function viewAccount() {
   const F = S.feed, th = themeNow();
   return `<section class="sec"><header><h2 class="h2">Account and data</h2><span class="aside" id="savedot">${S.saveState === "saving" ? "Saving…" : S.saveState === "error" ? "Not saved" : "Saved"}</span></header><div class="panel stack">
-    <div><div class="small muted" style="margin-bottom:6px">Appearance</div><div class="seg" role="group" aria-label="Theme">${[["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${th === k}">${l}</button>`).join("")}</div></div>
+    <div><div class="small muted" style="margin-bottom:6px">Projections from</div>${srcBar()}<p class="small muted" style="margin:8px 0 14px">${esc(SRC_HELP[S.ui.src])} It applies everywhere in the app. Week shows how each source's lineup differs.</p></div>
+      <div><div class="small muted" style="margin-bottom:6px">Appearance</div><div class="seg" role="group" aria-label="Theme">${[["auto", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${th === k}">${l}</button>`).join("")}</div></div>
     <dl class="kv"><dt>App version</dt><dd>${VERSION} (${BUILT})</dd><dt>Signed in as</dt><dd>${esc(S.user)}</dd><dt>Season and week</dt><dd>${F ? `${F.season}, week ${F.week}` : "–"}</dd><dt>Data checked</dt><dd>${F ? ago(F.fetchedAt) : "–"}</dd><dt>Game logs through week</dt><dd>${S.usage?.throughWeek ?? "–"}</dd></dl>
     <div class="toolbar"><button class="btn" data-act="reload">Check for new data</button><button class="btn" data-act="signout">Sign out</button></div>
     <p class="small muted">Data refreshes on its own. The button asks the server for the latest right now.</p>

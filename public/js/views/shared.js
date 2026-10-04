@@ -45,8 +45,9 @@ export function prow(id, C, { slot = null, sig = false, act = "", dim = false, p
   const tagHtml = tags.map((x, n) => `<span class="tag ${x.t}${n ? " t2" : ""}" title="${esc(x.s)}"><i></i>${esc(x.k)}<span class="sr">: ${esc(x.s)}</span></span>`).join("");
   // value "model" shows our stat model on its own, in this league's scoring; players it does not cover show a dash.
   const modelPts = pr?.model != null && pr.ppr > 0 ? pr.model * (pr.mean / pr.ppr) : null;
-  const shownNum = value === "model"
-    ? `<span class="num">${modelPts != null ? f1(modelPts) : "–"}</span><small>${modelPts != null ? "our model" : "no model"}</small>`
+  const srcWord = { model: "our model", experts: "experts", sleeper: "Sleeper" }[S.ui.src];
+  const shownNum = srcWord
+    ? `<span class="num">${pr?.mean > 0 ? f1(pr.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${pr?.srcMissing ? "blended" : srcWord}</small>`
     : `<span class="num">${pr?.mean > 0 || pr?.src === "none" || pr?.bye ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span><small>${note ? esc(note) : "&nbsp;"}</small>`;
   const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
     : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
@@ -77,3 +78,7 @@ export function syncLine(L, style = "") {
 
 // The projection source switch: the same control wherever it appears.
 export const srcBar = () => `<div class="seg" role="group" aria-label="Projections from">${Object.entries(SOURCES).map(([k, l]) => `<button data-act="src" data-v="${k}" aria-pressed="${S.ui.src === k}">${l}</button>`).join("")}</div>`;
+
+// Shown under the header on every screen, only while the numbers are not the tested Blended ones.
+export const srcStrip = () => (S.ui.src === "blend" ? "" : `<div class="srcstrip" role="status"><span>Numbers from <b>${SOURCES[S.ui.src]}</b></span><span class="srcact"><button class="link" data-act="src" data-v="blend">Use Blended</button><a class="link" href="#leagues">Settings</a></span></div>`);
+export const SRC_HELP = { blend: "The tested default: experts and Sleeper blended with our stat model, weighted by position.", model: "Our stat model on its own: recent usage, the betting market, the opponent, weather. Players it cannot rate keep their Blended number.", experts: "The experts' consensus projection, in your scoring.", sleeper: "Sleeper's own projection, in your scoring." };
