@@ -515,3 +515,10 @@ a.tile:focus-visible, .statrow:focus-visible { outline: 2px solid var(--link); o
 .tm-stack .me { outline: 2px solid var(--ink); outline-offset: -2px; } .tm-key.me { font-weight: 800; }
 .tm-wk { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; color: var(--ink2); font-size: 12px; margin-top: 6px; }
 .gh a.ab { color: inherit; text-decoration: none; display: inline-block; }
+
+/* Game page */
+.mu { margin: 14px 0; } .mu:first-child { margin-top: 2px; } .mu-t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+.face { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; height: 14px; } .face .l, .face .r { position: relative; background: var(--hair2); border-radius: 7px; overflow: hidden; } .face i { position: absolute; top: 0; bottom: 0; background: var(--ti); border-radius: 7px; } .face .l i { right: 0; } .face .r i { left: 0; }
+.mu-rk { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink2); margin-top: 4px; } .mu-rk .edge { font-weight: 700; color: var(--ink); text-align: center; }
+.tot-row { display: grid; grid-template-columns: 116px 1fr 44px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13.5px; } .tot-row .bar { height: 12px; border-radius: 6px; background: var(--hair2); position: relative; } .tot-row .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--ink3); } .tot-row.line .bar i { background: var(--ink); } .tot-row.line span { font-weight: 800; } .tot-row b { text-align: right; }
+.tm-hl { margin-left: 4px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 800; background: color-mix(in srgb, var(--down) 22%, var(--paper)); color: var(--down-ink); } .tm-code { font-weight: 800; color: var(--ink); }

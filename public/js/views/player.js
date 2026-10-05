@@ -129,7 +129,7 @@ export function viewPlayer(id) {
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
   if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
-  return feedError() + hero + teamStrip(pos === "DEF" ? null : p.t) + matchLine(id, C, p) + likely + advSection(id, p) + built + stands + form + experts + matchupSec + notesSection(id, C) + playerTeamSections(id, p, u);
+  return feedError() + hero + teamStrip(pos === "DEF" ? null : p.t) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + playerTeamSections(id, p, u);
 }
 
 function notesSection(id, C) {

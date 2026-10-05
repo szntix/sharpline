@@ -4,7 +4,7 @@ import { esc, f1, sgn, kickoffText, ago, plate, emblem, isDark } from "../ui.js"
 import { teamColors } from "../teams.js";
 import { slateMap } from "../charts.js";
 import { toneBy, pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
-import { viewTeams } from "./teams.js";
+import { viewTeams, gameOdds, gameMatchups, gameTotalContext, gameVolume, gameRankNotes } from "./teams.js";
 
 const WX_ICON = "";
 function wxLine(g) {
@@ -71,23 +71,30 @@ export function viewGame(id) {
   }
   if (g.forecast?.wind >= 15) notes.push({ t: "down", s: `${g.forecast.wind} mph wind expected at kickoff. Quarterbacks have scored less in wind like this over the last five seasons.` });
   if (g.forecast?.temp <= 35) notes.push({ t: "down", s: `${g.forecast.temp}° at kickoff. Cold has cost quarterbacks a little production in past seasons.` });
+  notes.push(...gameRankNotes(g));
   const done = g.status.completed;
   return `<a class="link" href="#slate" style="display:inline-block;margin:6px 0">Back to the slate</a>
     <p class="muted small" style="margin:2px 0 10px">${esc(kickoffText(g))}${g.venue?.name ? `, ${esc(g.venue.name)}` : ""}${g.tv ? `, ${esc(g.tv)}` : ""}</p>
     <div class="gh">${[[g.away, "Away", ca], [g.home, "Home", ch]].map(([ab, lab, cx]) => { const c = teamColors(ab, false); return `<div style="--tc:${c.plate};--tci:${c.plateInk}">${emblem(ab)}<small>${lab}</small><a class="ab" href="#team/${esc(ab)}" aria-label="${esc(ab)} team profile">${esc(ab)}</a><small>${done ? (ab === g.away ? g.awayScore : g.homeScore) + " final" : cx?.imp != null ? f1(cx.imp) + " expected points" : ""}</small></div>`; }).join("")}</div>
     ${L ? `<div class="stat3" style="margin-top:12px"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
     ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done && !/closing/i.test(L.book) ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
-    ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
+    ${gameOdds(g)}
     ${notes.length ? sec("What to know", noteList(notes)) : ""}
-    ${dvpSection(g)}
-    ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`) : ""}`;
+    ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
+    ${gameMatchups(g)}
+    ${gameTotalContext(g)}
+    ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`) : ""}
+    ${gameVolume(g, C)}
+    ${dvpSection(g)}`;
 }
 
 // How each defense has treated each position this season, against the league average (recency weighted, from nflverse), colored from the point of
 // view of the player facing it: green is a soft defense (a good matchup), red a tough one. An arrow and the sign say the same without color.
 function dvpSection(g) {
   const d = S.usage?.dvp; if (!d || (!d[g.home] && !d[g.away])) return "";
-  const cell = (team, pos) => { const v = d[team]?.[pos]; if (v == null) return `<td class="tone-n">–</td>`; const t = toneBy(v, [-0.15, -0.05, 0.05, 0.15]), arrow = v >= 0.05 ? "▲" : v <= -0.05 ? "▼" : "▬";
+  const rank = {}; for (const pos of ["QB", "RB", "WR", "TE"]) { const vs = Object.entries(d).filter(([, x]) => x?.[pos] != null).sort((a, b) => a[1][pos] - b[1][pos]); vs.forEach(([t], i) => { (rank[t] ||= {})[pos] = i + 1; }); }   // 1 = holds the position down the most
+  const cell = (team, pos) => cell0(team, pos).replace(/<\/td>$/, rank[team]?.[pos] ? ` <small class="muted">#${rank[team][pos]}</small></td>` : "</td>");
+  const cell0 = (team, pos) => { const v = d[team]?.[pos]; if (v == null) return `<td class="tone-n">–</td>`; const t = toneBy(v, [-0.15, -0.05, 0.05, 0.15]), arrow = v >= 0.05 ? "▲" : v <= -0.05 ? "▼" : "▬";
     return `<td class="tone-${t}" data-tone="${t}" title="${v >= 0 ? "Allows" : "Holds"} ${Math.round(Math.abs(v) * 100)}% ${v >= 0 ? "more" : "less"} than the average defense"><span class="arr" aria-hidden="true">${arrow}</span> ${v >= 0 ? "+" : "−"}${Math.round(Math.abs(v) * 100)}%</td>`; };
   const rows = ["QB", "RB", "WR", "TE"].map((pos) => `<tr><th>${pos}</th>${cell(g.home, pos)}${cell(g.away, pos)}</tr>`).join("");
   return sec("Defense against each position", `<div style="overflow-x:auto"><table class="dvp"><thead><tr><th></th><th>${esc(g.home)} defense<br><small>faces ${esc(g.away)}</small></th><th>${esc(g.away)} defense<br><small>faces ${esc(g.home)}</small></th></tr></thead><tbody>${rows}</tbody></table></div>

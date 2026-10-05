@@ -19,11 +19,11 @@ export function spark(vals, { w = 120, h = 36, color = "var(--ink)" } = {}) {
   const lo = Math.min(...vals), hi = Math.max(...vals), rng = hi - lo || 1, pts = vals.map((v, i) => [8 + (i * (w - 16)) / Math.max(1, vals.length - 1), h - 6 - ((v - lo) / rng) * (h - 12)]);
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trend: ${vals.map((v) => v).join(", ")}"><polyline points="${pts.map((p) => p.map((x) => x.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>${pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="${color}"/>`).join("")}</svg>`;
 }
-export function stack(items, { link = true, mark = null } = {}) {
+export function stack(items, { link = true, mark = null, tag = null } = {}) {
   if (!items?.length) return `<p class="muted small">Nothing yet.</p>`;
   const col = (it, i) => it.color || (it.extra ? "#9AA0A6" : COLORS[i % 4]), me = (it) => !!mark && it.id === mark;
   const segs = items.map((it, i) => `<div${me(it) ? ' class="me"' : ""} style="width:${(it.share * 100).toFixed(1)}%;background:${col(it, i)};min-width:2px"></div>`).join("");
-  const names = items.map((it, i) => { const nm = `${esc(lastName(it.name))} <b>${pct(it.share)}</b>`; return `<span class="tm-key${me(it) ? " me" : ""}"><i style="background:${col(it, i)}"></i>${link && it.id && !me(it) ? `<a href="#player/${esc(it.id)}">${nm}</a>` : nm}</span>`; }).join("");
+  const names = items.map((it, i) => { const nm = `${esc(lastName(it.name))} <b>${pct(it.share)}</b>`; return `<span class="tm-key${me(it) ? " me" : ""}"><i style="background:${col(it, i)}"></i>${link && it.id && !me(it) ? `<a href="#player/${esc(it.id)}">${nm}</a>` : nm}${tag ? tag(it) : ""}</span>`; }).join("");
   return `<div class="tm-stack" role="img" aria-label="${esc(items.map((it) => `${it.name} ${pct(it.share)}`).join(", "))}">${segs}<div class="rest"></div></div><div>${names}</div>`;
 }
 const rankBar = (label, o, fmt) => !o ? `<div class="tm-rk"><span>${label}</span><div class="tm-tr"></div><span class="muted small" style="text-align:right">not enough plays</span></div>`
@@ -118,5 +118,47 @@ export function playerTeamSections(id, p, u) {
     }
     out += sec("Next weeks", `<div class="tm-chips">${chips.join("")}</div><p class="tm-cap">Colored by how well each opponent defends the ${w2} (green is soft). It is the weakest signal we tested, so this is context, not an input to his projection.</p>`, "from the team's schedule");
   }
+  return out;
+}
+
+// ---------- on the game page ----------
+const teamData = () => { if (S.teams?.teams) return S.teams; if (!S.errors.teams) loadTeams(); return null; };
+export function gameOdds(g) {
+  const L = g.line; if (!L || L.spread == null || g.status?.completed) return "";
+  const pH = winOdds(L.spread), pA = 1 - pH, ca = teamStripe(g.away), ch = teamStripe(g.home);
+  return sec("Win odds", `<div class="panel"><div class="tm-odds" role="img" aria-label="${esc(g.away)} ${Math.round(pA * 100)} percent, ${esc(g.home)} ${Math.round(pH * 100)} percent"><div style="width:${(pA * 100).toFixed(1)}%;background:${ca}"></div><div style="flex:1;background:${ch}"></div></div><div class="tm-line" style="font-weight:800"><span>${esc(g.away)} ${Math.round(pA * 100)}%</span><span>${esc(g.home)} ${Math.round(pH * 100)}%</span></div><p class="tm-cap">From the betting line, which in a 3,408-game test beat every rating we could build. Not a prediction of our own.</p></div>`);
+}
+export function gameMatchups(g) {
+  const D = teamData(), A = D?.teams[g.away], H = D?.teams[g.home]; if (!A || !H || A.games < 2 || H.games < 2) return "";
+  const row = (o, d, ot, dt, kind) => { if (!o || !d) return ""; const gap = d.rank - o.rank, edge = gap >= 10 ? `${ot} edge` : gap <= -10 ? `${dt} edge` : "even", w = (r) => (((33 - r) / 32) * 100).toFixed(0);
+    return `<div class="mu"><div class="mu-t"><span><b>${esc(ot)}</b> ${kind} offense</span><span>vs <b>${esc(dt)}</b> ${kind} defense</span></div><div class="face"><div class="l tone-${rankTone(o.rank)}"><i style="width:${w(o.rank)}%"></i></div><div class="r tone-${rankTone(d.rank)}"><i style="width:${w(d.rank)}%"></i></div></div><div class="mu-rk"><span>#${o.rank} of 32</span><span class="edge">${esc(edge)}</span><span>#${d.rank} of 32</span></div></div>`; };
+  const rows = row(A.eff.passOff, H.eff.passDef, g.away, g.home, "pass") + row(A.eff.runOff, H.eff.runDef, g.away, g.home, "run") + row(H.eff.passOff, A.eff.passDef, g.home, g.away, "pass") + row(H.eff.runOff, A.eff.runDef, g.home, g.away, "run");
+  return rows ? sec("The matchups", `<div class="panel">${rows}<p class="tm-cap">Each bar is how strong that side has been this season (longer is better, rank 1 is best). A gap of 10 or more ranks is called an edge. It shows how they have played; the line already prices it.</p></div>`, "offense against defense") : "";
+}
+const styleLine = (t, code) => { const pr = t.passRate, pc = t.pace; if (!pr || !pc) return ""; return `<span class="tm-code">${esc(code)}</span>: ${pr.v > pr.lg + 0.03 ? "pass-heavy" : pr.v < pr.lg - 0.03 ? "run-leaning" : "balanced"} (pass rate #${pr.rank}), ${pc.rank <= 10 ? "fast" : pc.rank >= 23 ? "slow" : "average"} pace (#${pc.rank}).`; };
+export function gameTotalContext(g) {
+  const D = teamData(), A = D?.teams[g.away], H = D?.teams[g.home], tot = g.line?.total; if (!A || !H || tot == null || g.status?.completed || A.log.length < 2 || H.log.length < 2) return "";
+  const avg = (t) => t.log.reduce((s, x) => s + x.pf + x.pa, 0) / t.log.length, a = avg(A), h = avg(H), hi = Math.max(a, h, tot) * 1.12;
+  const bar = (label, v, cls = "") => `<div class="tot-row ${cls}"><span>${label}</span><div class="bar"><i style="width:${((v / hi) * 100).toFixed(0)}%"></i></div><b>${v.toFixed(1)}</b></div>`;
+  return sec("Why the total is what it is", `<div class="panel">${bar(`${esc(g.away)} games avg`, a)}${bar(`${esc(g.home)} games avg`, h)}${bar("This game's line", tot, "line")}<p class="tm-cap">Combined points per game this season, for each team and for this game as the market sets it.</p><p class="tm-cap">${styleLine(A, g.away)}<br>${styleLine(H, g.home)}</p></div>`, "scoring context");
+}
+const HURT = new Set(["Out", "IR", "PUP", "Sus", "Doubtful", "Questionable", "NA", "COV"]);
+export function gameVolume(g, C) {
+  const D = teamData(), A = D?.teams[g.away], H = D?.teams[g.home]; if (!A || !H || (!A.tshare.length && !H.tshare.length)) return "";
+  const tag = (it) => { const s = it.id ? C?.P?.proj?.[it.id]?.status : null; return s && HURT.has(s) ? `<span class="tm-hl">${esc(s)}</span>` : ""; };
+  const block = (t, code) => `<b>${esc(code)}</b> targets${stack(t.tshare, { tag })}<div style="height:6px"></div>carries${stack(t.cshare, { tag })}`;
+  return sec("Where the volume goes", `<div class="panel">${block(A, g.away)}<div style="height:16px"></div>${block(H, g.home)}<p class="tm-cap">Share of each team's targets and carries this season. A tag appears on anyone listed Out, Doubtful or Questionable; how the share redistributes is not guessed.</p></div>`);
+}
+// Notes from the ranks, added to What to know: only extremes (top or bottom five defenses, or both offenses at a pace extreme), and only with two games of evidence.
+export function gameRankNotes(g) {
+  const D = teamData(), A = D?.teams[g.away], H = D?.teams[g.home], out = []; if (!A || !H || A.games < 2 || H.games < 2) return out;
+  for (const [o, d, ot, dt, kind] of [[A.eff.passOff, H.eff.passDef, g.away, g.home, "pass"], [A.eff.runOff, H.eff.runDef, g.away, g.home, "run"], [H.eff.passOff, A.eff.passDef, g.home, g.away, "pass"], [H.eff.runOff, A.eff.runDef, g.home, g.away, "run"]]) {
+    if (!o || !d) continue;
+    if (d.rank >= 28) out.push({ t: "up", s: `${ot}'s ${kind} game faces ${dt}'s ${kind} defense, #${d.rank} of 32: one of the softest in the league.` });
+    if (d.rank <= 5) out.push({ t: "down", s: `${ot}'s ${kind} game faces ${dt}'s ${kind} defense, #${d.rank} of 32: one of the toughest in the league.` });
+  }
+  const pa = A.pace?.rank, ph = H.pace?.rank;
+  if (pa >= 23 && ph >= 23) out.push({ t: "down", s: `Two slow-paced offenses (#${pa} and #${ph}): fewer plays for everyone.` });
+  if (pa <= 10 && ph <= 10) out.push({ t: "up", s: `Two fast-paced offenses (#${pa} and #${ph}): more plays for everyone.` });
   return out;
 }
