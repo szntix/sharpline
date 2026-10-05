@@ -12,7 +12,7 @@ export function pulse(feed) {
   const waiting = src.filter((s) => s.status === "missing" || s.status === "stale").length;
   const broken = src.filter((s) => s.status === "broken").length;
   const label = broken ? `${broken} source${broken > 1 ? "s" : ""} changed format` : waiting ? `${waiting} of ${src.length} sources waiting` : `Live data, checked ${ago(feed.fetchedAt)}`;
-  return `<details class="pulse"><summary><span class="pdots" aria-hidden="true">${src.map((s) => `<i class="${s.status}"></i>`).join("")}</span>${esc(label)}</summary>
+  return `<details class="pulse" data-fold="pulse" ${S.ui.folds?.pulse ? "open" : ""}><summary><span class="pdots" aria-hidden="true">${src.map((s) => `<i class="${s.status}"></i>`).join("")}</span>${esc(label)}</summary>
     <div class="plist">${src.map((s) => `<div class="pr"><i class="${s.status}"></i><div>${esc(s.label)}<small>${esc(s.note)}</small></div><time>${s.asOf ? agoShort(s.asOf) : "waiting"}</time></div>`).join("")}
     <div class="pr"><i class="${S.usage ? "fresh" : "missing"}"></i><div>Game logs<small>${S.usage ? `Through week ${S.usage.throughWeek}, nflverse` : "Not loaded"}</small></div><time>${S.usage ? agoShort(S.usage.asOf) : "waiting"}</time></div></div></details>`;
 }
@@ -27,7 +27,7 @@ export function loading(what = "this week's numbers") {
   return `<div class="stack"><div class="skel" style="height:220px;border-radius:20px"></div><div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div><p class="muted small"><span class="spinner"></span> Loading ${esc(what)}…</p></div>`;
 }
 export function feedError() {
-  return S.errors.feed ? `<div class="banner err" role="alert" style="margin-bottom:12px">Couldn't reach the data feed: ${esc(S.errors.feed)}. What you see may be out of date. <button class="link" data-act="reload">Try again</button></div>` : "";
+  return S.errors.feed ? fold("alert:feed", "Couldn't reach the data feed", `${esc(S.errors.feed)}. What you see may be out of date. <button class="link" data-act="reload">Try again</button>`, { open: true, headline: "What you see may be out of date", tone: "b2", role: "alert" }) : "";
 }
 
 // One player row, always two lines so every row is the same size: the name, position and status on top, and below it
@@ -89,9 +89,11 @@ export const SRC_HELP = { blend: "The tested default: experts and Sleeper blende
 // Color is never the only cue: the same screens also carry words or arrows.
 export const toneBy = (v, cuts) => (v == null || !isFinite(v) ? "n" : v < cuts[0] ? "b2" : v < cuts[1] ? "b1" : v < cuts[2] ? "n" : v < cuts[3] ? "g1" : "g2");
 // A section that stays folded until tapped; its open or closed state survives redraws.
-export function fold(key, title, body, { badge = null } = {}) {
-  const open = !!S.ui.folds?.[key];
-  return `<details class="fold" data-fold="${key}" ${open ? "open" : ""}><summary><span class="ft">${esc(title)}</span>${badge != null ? `<span class="count">${esc(String(badge))}</span>` : ""}</summary><div class="foldbody">${body}</div></details>`;
+// A collapsible box. The choice is remembered per key (see saveFolds); `open` is only the starting state before anyone has chosen. An alert passes a
+// headline, which stays visible on one line while the box is closed, and a tone for the colored edge, so closing it never hides that something is there.
+export function fold(key, title, body, { badge = null, open: start = false, headline = "", tone = "", heading = false, role = "" } = {}) {
+  const saved = S.ui.folds?.[key], open = saved != null ? !!saved : !!start, alert = !!(headline || tone);
+  return `<details class="fold${alert ? " alertf" : ""}${tone ? ` tone-${tone}` : ""}" data-fold="${key}"${role ? ` role="${role}"` : ""} ${open ? "open" : ""}><summary>${heading ? `<h2 class="ft">${esc(title)}</h2>` : `<span class="ft">${esc(title)}</span>`}${badge != null ? `<span class="count">${esc(String(badge))}</span>` : ""}${headline ? `<span class="fh">${esc(headline)}</span>` : ""}</summary><div class="foldbody">${body}</div></details>`;
 }
 
 // Five bars, filled to the matchup's level and colored by its tone. Wordless on rows; the profile says it in words.

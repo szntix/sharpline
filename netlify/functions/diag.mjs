@@ -26,7 +26,7 @@ export default async () => {
         let mean = 0;
         if (pos === "DEF") { const st = defenseStats(c?.imp, c?.oppImp, c?.spread ?? 0); mean = st ? points(st, s, "DEF") : 0; }
         else {
-          const sp = feed.proj?.players?.[id], st = sp || kickerStats(c?.imp);
+          const sp = feed.proj?.players?.[id], st = sp || kickerStats(c?.imp, { spread: c?.spread ?? 0 });
           if (sp) r.withSleeperProjection++;
           mean = st ? points(st, s, "K") * availMult(availability(p.i, feed.injuries?.players?.[id]).status) : 0;
         }

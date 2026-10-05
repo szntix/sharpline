@@ -164,19 +164,30 @@ export function xppr(pos, tgt, car) { const c = MODEL.xppr[pos]; return c && tgt
 // ---------------------------------------------------------------------------------------------
 // Kickers and defenses have no player model. They are estimated from the game line, and labeled as estimates.
 // ---------------------------------------------------------------------------------------------
+// Defense and kicker projections from the game line. Every number below was fitted to 2021 to 2025 results (2,238 defense games, 2,232 kicker games) and checked
+// on seasons it was not fitted to: the defense projection averages 6.1 against 6.2 actual, with calibration slope 0.97; the kicker projection 8.2 against 8.2.
+// (The earlier hand-set constants projected defenses at 7.2 and were too steep, and projected kickers worse than the league average.) Each component is an expected
+// COUNT, so the league's own scoring weights turn it into points. Defense counts: [constant, per point the opponent is expected to score above 22, per point of spread].
+const DEF_COUNTS = { sack: [2.39405, -0.06282, 0.0159], int: [0.75954, 0.00504, 0.01739], fum_rec: [0.48579, -0.00515, 0.00349], def_td: [0.06629, -0.00084, 0.0014], safe: [0.02246, 0.00173, 0.00061], blk_kick: [0.06635, -0.00117, -0.00112], def_st_td: [0.03177, -0.00024, 0.00037] };
+const PTS_ALLOWED = { a: 22.373, b: 1.0428, sd: 9.058 };      // points the opponent scores = a + b * (expected - 22), normal spread sd
 export function defenseStats(implied, oppImplied, spread) {
   if (implied == null || oppImplied == null) return null;
-  const sd = 9.6, mu = oppImplied;
+  const x = oppImplied - 22, mu = PTS_ALLOWED.a + PTS_ALLOWED.b * x, sd = PTS_ALLOWED.sd;
   const tiers = [["pts_allow_0", -Infinity, 0.5], ["pts_allow_1_6", 0.5, 6.5], ["pts_allow_7_13", 6.5, 13.5], ["pts_allow_14_20", 13.5, 20.5], ["pts_allow_21_27", 20.5, 27.5], ["pts_allow_28_34", 27.5, 34.5], ["pts_allow_35p", 34.5, Infinity]];
   const st = {}; for (const [k, lo, hi] of tiers) st[k] = normCdf((hi - mu) / sd) - normCdf((lo - mu) / sd);
-  const pressure = 1 + 0.025 * spread - 0.015 * (oppImplied - 22);
-  Object.assign(st, { sack: 2.45 * pressure, int: 0.78 * pressure, fum_rec: 0.55 * pressure, def_td: 0.16 * pressure, safe: 0.03, blk_kick: 0.06, def_st_td: 0.05 });
+  for (const [k, cf] of Object.entries(DEF_COUNTS)) st[k] = Math.max(0, cf[0] + cf[1] * x + cf[2] * (spread || 0));
   return st;
 }
-export function kickerStats(implied) {
+// Kicker counts: [constant, per point his team is expected to score above 22, per point of spread, per mph of wind, per degree F, indoors]. Wind and temperature are the
+// forecast when there is one, typical outdoor conditions (8 mph, 57 F) when there is not, and a calm 65 F indoors, exactly as in the fit.
+const K_COUNTS = { fgm_0_19: [0.01093, 0.00095, -0.00046, -0.00071, -1e-05, -0.00853], fgm_20_29: [0.39734, -0.00466, 0.00745, -0.0019, 0.0009, -0.06118], fgm_30_39: [0.50071, -0.01188, 0.0127, -0.00067, 0.00047, -0.01352], fgm_40_49: [0.38812, -0.00855, 0.00717, -0.00501, 0.00093, 0.07079], fgm_50p: [0.11486, -0.00588, 0.00117, -0.00114, 0.0025, 0.094], xpm: [2.09629, 0.12357, 0.00985, -0.00944, 0.00165, -0.04487], fgmiss: [0.34758, 0.00098, -0.00013, 0.00092, -0.00116, 0.01993] };
+export function kickerStats(implied, env = {}) {
   if (implied == null) return null;
-  const fgm = implied * 0.068, xpm = implied * 0.087 * 0.94;
-  return { fgm_0_19: fgm * 0.02, fgm_20_29: fgm * 0.25, fgm_30_39: fgm * 0.28, fgm_40_49: fgm * 0.27, fgm_50p: fgm * 0.18, xpm, fgmiss: 0.26, xpmiss: 0.05 };
+  const x = implied - 22, sp = env.spread ?? 0, dome = env.dome ? 1 : 0, wind = dome ? 0 : env.wx?.wind ?? 8.4, temp = dome ? 65 : env.wx?.temp ?? 57.1, st = { xpmiss: 0.05 };
+  for (const [k, cf] of Object.entries(K_COUNTS)) st[k] = Math.max(0, cf[0] + cf[1] * x + cf[2] * sp + cf[3] * wind + cf[4] * temp + cf[5] * dome);
+  return st;
 }
+// Average two stat projections (for example Sleeper's and ours) component by component, over the components we model.
+export function mixStats(other, ours, w = 0.5) { const out = { ...ours }; for (const k of Object.keys(ours)) if (other[k] != null && Number.isFinite(other[k])) out[k] = w * other[k] + (1 - w) * ours[k]; return out; }
 
 export { minsTo };

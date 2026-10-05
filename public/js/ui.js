@@ -79,3 +79,15 @@ export function percentile(sorted, v) {
   let hi = lo; while (hi < sorted.length && sorted[hi] === v) hi++;
   return Math.round(((lo + hi) / 2 / sorted.length) * 100);
 }
+
+// A short label for an opponent's team name, for tight spots like the score bug. Emoji and filler words ("The", "Mr", "Team"...) are ignored; a name of three
+// or more real words becomes its initials ("Smokin' Jay Cutler" is SJC); otherwise the first real word, abbreviated with an ellipsis if it runs past ten letters.
+const FILLER = new Set(["the", "a", "an", "mr", "mrs", "ms", "dr", "team", "los", "las", "of", "and", "da", "el", "la"]);
+export function shortTeamName(raw) {
+  const text = String(raw ?? "").trim(), clean = text.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, "").replace(/\s+/g, " ").trim();
+  const edge = (w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""), words = clean.split(" ").map(edge).filter(Boolean), real = words.filter((w) => !FILLER.has(w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")));
+  const fit = (s) => (s.length <= 10 ? s : s.slice(0, 9) + "\u2026");
+  if (real.length >= 3) return real.slice(0, 4).map((w) => Array.from(w)[0]).join("").toUpperCase();
+  if (real.length && real[0].replace(/[^\p{L}\p{N}]/gu, "").length >= 2) return fit(real[0]);
+  return fit(clean || text || "Opponent");
+}

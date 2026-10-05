@@ -1,7 +1,7 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
+import { saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -32,7 +32,7 @@ applyTheme();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { applyTheme(); render(); });
 // A team logo that does not load just disappears, leaving the letters underneath.
 $app.addEventListener("error", (e) => { const t = e.target; if (t?.tagName === "IMG" && t.closest(".plate, .emblem")) t.remove(); }, true);
-$app.addEventListener("toggle", (e) => { const d = e.target; if (d?.matches?.("details[data-fold]")) (S.ui.folds ||= {})[d.dataset.fold] = d.open; }, true);
+$app.addEventListener("toggle", (e) => { const d = e.target; if (d?.matches?.("details[data-fold]")) { (S.ui.folds ||= {})[d.dataset.fold] = d.open; (S.ui.userFolds ||= {})[d.dataset.fold] = d.open; saveFolds(); } }, true);
 $app.addEventListener("load", (e) => { const t = e.target; if (t?.tagName === "IMG") t.closest(".plate.mono")?.classList.add("ok"); }, true);
 
 // ---------------------------------------------------------------- icons and shell
@@ -77,6 +77,7 @@ function render() {
   if (window.scrollY !== y && S._keepScroll) window.scrollTo(0, y);
   document.title = "Sharpline";
   window.__hideSplash?.();
+  queueMicrotask(updateBug);
   if (["week", "players", "moves"].includes(name)) queueMicrotask(() => ensureRosters());
 }
 window.addEventListener("hashchange", () => { S._keepScroll = false; render(); window.scrollTo(0, 0); });
@@ -198,6 +199,8 @@ $app.addEventListener("click", async (e) => {
     case "pick-cmp": { const i = S.ui.pick.indexOf(id); if (i >= 0) S.ui.pick.splice(i, 1); else { if (S.ui.pick.length >= 2) S.ui.pick.shift(); S.ui.pick.push(id); } render(); break; }
     case "cmp-go": { const [x, y] = S.ui.pick; S.ui.pick = []; location.hash = `compare/${x}/${y}`; break; }
     case "cmp-clear": S.ui.pick = []; render(); break;
+    case "to-top": window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); break;
+    case "jump-starters": document.getElementById("starters")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); break;
     case "slate-view": S.ui.slateView = v; render(); break;
     case "teams-retry": delete S.errors.teams; loadTeams(true); break;
     case "moves-tab": if (v === "trades" && S.ui.moves !== "trades") { S.ui.partner = ""; S.ui.give = []; S.ui.get = []; } S.ui.moves = v; render(); break;
@@ -287,3 +290,13 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("click", (e) => { if (!e.target.closest(".search")) document.querySelectorAll(".search ul").forEach((u) => (u.hidden = true)); });
 
 boot();
+
+// The score bug: once the matchup card has scrolled up under the header, a slim copy of it slides in just below the header.
+let bugRaf = 0;
+function updateBug() {
+  const bug = document.getElementById("wbug"), card = document.getElementById("wcard"); if (!bug || !card) return;
+  const hb = document.querySelector(".top")?.getBoundingClientRect().bottom || 0;
+  bug.style.top = `${Math.round(hb + 6)}px`; bug.classList.toggle("show", card.getBoundingClientRect().bottom < hb + 8);
+}
+window.addEventListener("scroll", () => { if (!bugRaf) bugRaf = requestAnimationFrame(() => { bugRaf = 0; updateBug(); }); }, { passive: true });
+window.addEventListener("resize", updateBug);

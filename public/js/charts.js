@@ -60,11 +60,11 @@ export const inkFor = (h) => { const c = hx(h).map((v) => { v /= 255; return v <
 const BALL = `<svg viewBox="0 0 40 24" width="34" height="20" aria-hidden="true"><ellipse cx="20" cy="12" rx="17" ry="9.5" transform="rotate(-14 20 12)" fill="#8a4620" stroke="#2b1206" stroke-width="1.6"/><path d="M11 14l17-6M15 9.5l1.8 6M19.5 8l1.8 6M24 6.8l1.8 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`;
 
 // ---------- The field: win probability as field position ----------
-export function drive(win, { you = "You", foe = "Opponent" } = {}) {
-  const p = Math.round(win * 100), col = chanceColor(win);
-  return `<div class="field-w" role="img" aria-label="${esc(you)} has a ${p} percent chance to win against ${esc(foe)}. The ball sits ${p} yards from your goal line.">
-    <div class="fbar"><span class="win" style="width:${p}%;background:${col};color:${inkFor(col)}">${esc(you)} ${p}%</span><span class="lose">${100 - p}%</span><span class="ball" style="left:${p}%">${BALL}</span></div>
-    <div class="yards" aria-hidden="true">${[10, 20, 30, 40, 50, 40, 30, 20, 10].map((n) => `<i>${n}</i>`).join("")}</div></div>`;
+// The win chance as field position. The strip is its own coordinate system: bands, yard lines, numbers and the ball all sit on the same 10% grid as the card
+// behind it (the card is a 100-yard field), so they line up at any width. The ball is as many yards from your goal line as your chance is percent.
+export function fieldStrip(win, { label = "", compact = false } = {}) {
+  const p = Math.round(win * 100), col = chanceColor(win), nums = [10, 20, 30, 40, 50, 40, 30, 20, 10].map((n, i) => `<span class="yn" style="left:${(i + 1) * 10}%">${n}</span>`).join("");
+  return `<div class="wfs${compact ? " sm" : ""}" role="img" aria-label="You have a ${p} percent chance to win. The ball sits ${p} yards from your goal line."><div class="drv" style="width:${p}%;background:${col};color:${inkFor(col)}">${esc(label || `You ${p}%`)}</div><div class="rest">${100 - p}%</div><span class="ball" style="left:${p}%">${BALL}</span>${nums}</div>`;
 }
 
 // ---------- How the number is built ----------

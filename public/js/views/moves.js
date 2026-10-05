@@ -4,6 +4,7 @@ import { xppr } from "../model.js";
 import { SLOT_ELIG, SLOT_LABEL, positionsFor, inPosition } from "../scoring.js";
 import { esc, f1, f0, sgn, posLabel, posClass, plate, teamStripe } from "../ui.js";
 import { luck } from "../charts.js";
+import { viewStreaming } from "./streaming.js";
 import { toneBy, loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
 
 // A player's position as a colored chip, so a name is never just text.
@@ -54,8 +55,8 @@ function unavailableSet(L) { const s = new Set([...L.roster, ...(L.taken || [])]
 export function viewMoves() {
   if (!S.players || !S.feed) return feedError() + loading();
   const tab = S.ui.moves, L = league();
-  const seg = `<div class="seg" role="group" aria-label="Section">${[["waivers", "Waivers"], ["trades", "Trades"], ["regress", "Hot and cold"]].map(([k, l]) => `<button data-act="moves-tab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
-  const body = tab === "regress" ? viewRegress() : !L ? emptyLeague() : tab === "trades" ? viewTrades(L) : viewWaivers(L);
+  const seg = `<div class="seg" role="group" aria-label="Section">${[["waivers", "Waivers"], ["trades", "Trades"], ["stream", "Streaming"], ["regress", "Hot and cold"]].map(([k, l]) => `<button data-act="moves-tab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
+  const body = tab === "regress" ? viewRegress() : !L ? emptyLeague() : tab === "trades" ? viewTrades(L) : tab === "stream" ? viewStreaming(L) : viewWaivers(L);
   return `${feedError()}<div class="stack"><h1 class="h1" style="margin-top:8px">Moves</h1>${seg}${body}</div>`;
 }
 

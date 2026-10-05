@@ -3,7 +3,7 @@ import { teamContext } from "../model.js";
 import { esc, f1, sgn, kickoffText, ago, plate, emblem, isDark } from "../ui.js";
 import { teamColors } from "../teams.js";
 import { slateMap } from "../charts.js";
-import { toneBy, pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
+import { fold, toneBy, pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
 import { viewTeams, gameOdds, gameMatchups, gameTotalContext, gameVolume, gameRankNotes } from "./teams.js";
 
 const WX_ICON = "";
@@ -79,7 +79,7 @@ export function viewGame(id) {
     ${L ? `<div class="stat3" style="margin-top:12px"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
     ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done && !/closing/i.test(L.book) ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
     ${gameOdds(g)}
-    ${notes.length ? sec("What to know", noteList(notes)) : ""}
+    ${notes.length ? fold("game-notes", "What to know", noteList(notes), { badge: notes.length, headline: notes[0].s, tone: notes.some((n) => n.t === "down") ? "b1" : "g2", heading: true }) : ""}
     ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
     ${gameMatchups(g)}
     ${gameTotalContext(g)}

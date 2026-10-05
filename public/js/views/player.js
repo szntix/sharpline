@@ -7,7 +7,7 @@ import { signals, statusText } from "../engine.js";
 import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe, emblem } from "../ui.js";
 import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots } from "../charts.js";
 import { quantile } from "../engine.js";
-import { mmHtml, loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
+import { fold, mmHtml, loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
 
 const AGE = (p) => (p.a ? `, age ${Math.floor(p.a)}` : "");
 export const defaultThr = (pr, pos) => Math.max(5, Math.round(pr.mean / 5) * 5);
@@ -59,7 +59,7 @@ export function viewPlayer(id) {
 
   // 2. How we got the number
   function modelWhy(pid, pp, q) {
-    if (q.src === "lines") return "Kickers and defenses have no player-level model. This is an estimate from the game's betting line, and it has not been tested the way player projections have.";
+    if (q.src === "lines") return "Kickers and defenses have no player-level model. This is an estimate from the game's betting line, fitted to five seasons of results and checked on seasons it was not fitted to. It is not graded week by week the way player projections are, and any single week is mostly luck.";
     const base = q.kind === "experts" ? "the experts' consensus" : q.kind === "sleeper" ? "Sleeper's number" : "our best available number", u = S.usage?.players?.[pid];
     if (!S.usage) return `Game logs are still loading, so for now this is ${base}.`;
     if (!u) return `Our stat model has nothing to work from because ${esc(pp.n)} could not be matched to his game logs, so this is ${base}.`;
@@ -134,7 +134,8 @@ export function viewPlayer(id) {
 
 function notesSection(id, C) {
   const s = signals(id, C.c, C.P);
-  return s.length ? sec("Worth knowing", noteList(s.map((x) => ({ t: x.t === "info" ? "" : x.t, s: x.s })))) : "";
+  const items = s.map((x) => ({ t: x.t === "info" ? "" : x.t, s: x.s }));
+  return s.length ? fold("player-notes", "Worth knowing", noteList(items), { badge: items.length, headline: items[0].s, tone: items.some((n) => n.t === "down") ? "b1" : "g2", heading: true }) : "";
 }
 
 // This season's efficiency from the nflverse weekly file. Each stat is ranked against everyone at the position with two or more games, and the tile says in

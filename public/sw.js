@@ -1,5 +1,5 @@
 // App shell is cached for offline launch. Data calls always try the network first and fall back to the last good copy.
-const SHELL = "sharpline-shell-v3-19", DATA = "sharpline-data-v3-19";
+const SHELL = "sharpline-shell-v3-22", DATA = "sharpline-data-v3-22";
 const FILES = [
  "/",
  "/fonts/archivo-latin-wdth-normal.woff2",
@@ -30,7 +30,7 @@ const FILES = [
  "/js/views/week.js",
  "/manifest.webmanifest",
  "/styles.css"
-];
+, "/js/views/streaming.js", "/js/dsthistory.js"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => ![SHELL, DATA].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

@@ -1,6 +1,6 @@
 import { points, PPR, SLOT_ELIG, SLOT_LABEL } from "./scoring.js";
 import { STUDY, pairCorr } from "./research.js";
-import { makeRow, project, gameMap, teamContext, defenseStats, kickerStats, availability, availMult, minsTo, invNorm, xppr } from "./model.js";
+import { makeRow, project, gameMap, teamContext, defenseStats, kickerStats, mixStats, availability, availMult, minsTo, invNorm, xppr } from "./model.js";
 export { invNorm };
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ export function buildProjections(ctx, league) {
     }
     if (p.p === "K") {
       const av = availability(p.i, feed?.injuries?.players?.[id]);
-      const sp = feed?.proj?.players?.[id], st = sp || kickerStats(c?.imp);
+      const sp = feed?.proj?.players?.[id], ours = kickerStats(c?.imp, { spread: c?.spread ?? 0, wx: g?.forecast || null, dome: !!g?.venue?.indoor }), st = sp && ours ? mixStats(sp, ours, 0.5) : sp || ours;   // Sleeper's projection, averaged with ours when both exist
       const mult = bye ? 0 : availMult(av.status, { official: av.official, minsToKick: minsTo(g) });
       const mean = st ? points(st, s, "K") * mult : 0, [a, b] = STUDY.volatility.K;
       out[id] = { ...base, mean: +mean.toFixed(2), ppr: mean, lscale: 1, sd: Math.max(1, a + b * mean), kind: sp ? "sleeper" : st ? "lines" : "none", src: bye ? "bye" : sp ? "sleeper" : st ? "lines" : "none", status: av.status, practice: av.practice, injury: av.injury, cons: null, experts: null, model: null, sleeper: sp?.ppr ?? null, parts: null, ecr: feed?.ecr?.players?.[id] || null };

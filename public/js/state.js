@@ -6,10 +6,13 @@ import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
 import { buildProjections, rosValues, replacement, waiverLevel, matchupStrength } from "./engine.js";
 
 // Everything the views share: loaded data, the signed-in user's profile, and derived projections.
+// The open or closed choice for every collapsible box (alerts, notes, sources), saved on this device so it survives reloads.
+const loadFolds = () => { try { const v = JSON.parse(localStorage.getItem("sharpline.folds") || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
+export function saveFolds() { try { localStorage.setItem("sharpline.folds", JSON.stringify(S.ui.userFolds || {})); } catch { /* private mode: the choice lasts for this session */ } }
 export const S = {
   user: null, profile: null, players: null, feed: null, usage: null, outlook: null, acc: null, trending: {},
   week: null, activeWeek: null, errors: {}, loading: true, saveState: "saved", route: { name: "week", args: [] },
-  ui: { folds: {}, src: (() => { try { return localStorage.getItem("sharpline.src") || "blend"; } catch { return "blend"; } })(), trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
+  ui: { folds: loadFolds(), userFolds: loadFolds(), src: (() => { try { return localStorage.getItem("sharpline.src") || "blend"; } catch { return "blend"; } })(), trView: "me", cmpMode: false, wvMode: "ros", wvPos: "ALL", give: [], get: [], partner: "", imp: null, editing: null, plPos: "ALL", plSort: "proj", plQ: "", plFilter: "all", plMore: 1, pick: [], moves: "waivers", proofPos: "WR", thr: {} },
 };
 export let render = () => {};
 export const setRender = (fn) => { render = fn; };
