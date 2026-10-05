@@ -4,6 +4,7 @@ import { esc, f1, sgn, kickoffText, ago, plate, emblem, isDark } from "../ui.js"
 import { teamColors } from "../teams.js";
 import { slateMap } from "../charts.js";
 import { toneBy, pulse, loading, feedError, prow, sec, noteList } from "./shared.js";
+import { viewTeams } from "./teams.js";
 
 const WX_ICON = "";
 function wxLine(g) {
@@ -32,7 +33,7 @@ export function gameRow(g) {
     <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span class="nw">${esc(spr)}, total ${g.line.total}${moveText(g.line)}</span>` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
 }
 
-export function viewSlate() {
+function viewGames() {
   if (!S.feed) return feedError() + loading("the schedule");
   const games = S.feed.games, priced = games.filter((g) => g.line).length;
   const ranked = [...games].sort((a, b) => (b.line ? b.line.total : -1) - (a.line ? a.line.total : -1));
@@ -73,7 +74,7 @@ export function viewGame(id) {
   const done = g.status.completed;
   return `<a class="link" href="#slate" style="display:inline-block;margin:6px 0">Back to the slate</a>
     <p class="muted small" style="margin:2px 0 10px">${esc(kickoffText(g))}${g.venue?.name ? `, ${esc(g.venue.name)}` : ""}${g.tv ? `, ${esc(g.tv)}` : ""}</p>
-    <div class="gh">${[[g.away, "Away", ca], [g.home, "Home", ch]].map(([ab, lab, cx]) => { const c = teamColors(ab, false); return `<div style="--tc:${c.plate};--tci:${c.plateInk}">${emblem(ab)}<small>${lab}</small><span class="ab">${esc(ab)}</span><small>${done ? (ab === g.away ? g.awayScore : g.homeScore) + " final" : cx?.imp != null ? f1(cx.imp) + " expected points" : ""}</small></div>`; }).join("")}</div>
+    <div class="gh">${[[g.away, "Away", ca], [g.home, "Home", ch]].map(([ab, lab, cx]) => { const c = teamColors(ab, false); return `<div style="--tc:${c.plate};--tci:${c.plateInk}">${emblem(ab)}<small>${lab}</small><a class="ab" href="#team/${esc(ab)}" aria-label="${esc(ab)} team profile">${esc(ab)}</a><small>${done ? (ab === g.away ? g.awayScore : g.homeScore) + " final" : cx?.imp != null ? f1(cx.imp) + " expected points" : ""}</small></div>`; }).join("")}</div>
     ${L ? `<div class="stat3" style="margin-top:12px"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
     ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done && !/closing/i.test(L.book) ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
     ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
@@ -91,4 +92,11 @@ function dvpSection(g) {
   const rows = ["QB", "RB", "WR", "TE"].map((pos) => `<tr><th>${pos}</th>${cell(g.home, pos)}${cell(g.away, pos)}</tr>`).join("");
   return sec("Defense against each position", `<div style="overflow-x:auto"><table class="dvp"><thead><tr><th></th><th>${esc(g.home)} defense<br><small>faces ${esc(g.away)}</small></th><th>${esc(g.away)} defense<br><small>faces ${esc(g.home)}</small></th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small muted" style="margin-top:8px"><span class="key tone-g2"></span>Soft: a good matchup for the player facing it. <span class="key tone-n"></span>Average. <span class="key tone-b2"></span>Tough. The number is the fantasy points the defense has allowed to that position compared with the league average.</p>`);
+}
+
+// Slate has two views: the week's games (as it always was) and the team rankings.
+export function viewSlate() {
+  const v = S.ui.slateView === "teams" ? "teams" : "games";
+  const seg = `<div class="seg" role="group" aria-label="Slate view" style="margin-bottom:12px">${[["games", "Games"], ["teams", "Teams"]].map(([k, l]) => `<button data-act="slate-view" data-v="${k}" aria-pressed="${v === k}">${l}</button>`).join("")}</div>`;
+  return seg + (v === "teams" ? viewTeams() : viewGames());
 }

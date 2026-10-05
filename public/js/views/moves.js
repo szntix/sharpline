@@ -21,8 +21,8 @@ function tradePreview(L, C, give, get, partner) {
   const wasStart = new Set(B.starters.map((s) => s.id).filter(Boolean)), slotOf = (id) => B.starters.find((s) => s.id === id)?.slot;
   const tag = (kind, text) => `<span class="tag ${kind}"><i></i>${esc(text)}</span>`, last = (id) => pname(id).split(" ").slice(-1)[0];
   const row = (id, { lead, slot = null, tags = "", note = "", dim = false }) => { const p = S.players[id]; if (!p) return "";
-    return `<div class="row slotted pv${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}"><span class="pos ${slot ? posClass(slot) : "neu"}">${esc(lead)}</span>
-      <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && slot === p.p ? "" : posTag(id)}</span><span class="sub"><span class="meta">${esc(note || p.t || "FA")}</span>${tags ? `<span class="tags">${tags}</span>` : ""}</span></div>
+    return `<div class="row slotted pv${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}"><span class="pos ${slot ? posClass(SLOT_ELIG[slot]?.length > 1 ? p.p : slot) : "neu"}">${esc(lead)}</span>
+      <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === p.p || SLOT_ELIG[slot]?.length > 1) ? "" : posTag(id)}</span><span class="sub"><span class="meta">${esc(note || p.t || "FA")}</span>${tags ? `<span class="tags">${tags}</span>` : ""}</span></div>
       <div class="proj"><span class="num">${val(id) > 0 ? f1(val(id)) : "–"}</span><small>per game</small></div></div>`; };
   const starters = A.starters.map((s, i) => {
     const lead = SLOT_LABEL[s.slot] || s.slot;

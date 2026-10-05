@@ -33,7 +33,7 @@ function advanced(now) {
     vol: { db: att + sk, car: cr, tgt: tg, rec } };
 }
 // The fetcher cachedConditional wants: unchanged (304), not published yet (404), or the parsed rows with the file's ETag.
-const rowsFetcher = (season) => async (etag) => {
+export const rowsFetcher = (season) => async (etag) => {
   const r = await getTextConditional(`${NFLV}/stats_player/stats_player_week_${season}.csv`, etag, { timeout: 45000 });
   return r.text != null ? { data: parseRows(r.text), etag: r.etag } : r;
 };

@@ -67,9 +67,15 @@ export async function loadFeed(week = null) {
 // Re-check the feed without touching the screen unless something visible changed.
 export async function refreshFeedQuiet() {
   try {
-    const f = await api(`feed${S.week ? `?week=${S.week}` : ""}`, { auth: false }); S.feedAt = Date.now();
-    if (feedSignature(f) === feedSignature(S.feed)) { S.feed.fetchedAt = f.fetchedAt; return false; }
-    S.feed = f; S.week = f.week; delete S.errors.feed; invalidate(); render(); return true;
+    // On the current week the server is asked which week is current, so the app moves on by itself when the last game of the week ends.
+    // Browsing another week keeps asking for that week, and now and then checks which week is current so the Now button stays right.
+    const onNow = S.activeWeek == null || S.week === S.activeWeek;
+    const f = await api(onNow ? "feed" : `feed${S.week ? `?week=${S.week}` : ""}`, { auth: false }); S.feedAt = Date.now();
+    let advanced = false;
+    if (onNow) { advanced = S.activeWeek != null && f.week !== S.activeWeek; S.activeWeek = f.week; }
+    else if (Date.now() - (S.nowCheckedAt || 0) > 10 * 60e3) { S.nowCheckedAt = Date.now(); api("feed", { auth: false }).then((n) => { if (n?.week && n.week !== S.activeWeek) { S.activeWeek = n.week; render(); } }).catch(() => {}); }
+    if (!advanced && feedSignature(f) === feedSignature(S.feed)) { S.feed.fetchedAt = f.fetchedAt; return false; }
+    S.feed = f; S.week = f.week; delete S.errors.feed; invalidate(); render(); return advanced ? "advanced" : true;
   } catch { return false; }     // keep what is on screen; errors only surface on a manual refresh
 }
 
@@ -96,10 +102,17 @@ export async function loadData() {
 // so a long-open app does not keep yesterday's injury statuses or last week's stats. Nothing redraws unless something actually changed.
 export async function refreshSharedQuiet() {
   let changed = false;
-  await Promise.all(Object.entries({ players: "players", usage: "usage", outlook: "outlook", acc: "accuracy" }).map(async ([k, path]) => {
+  await Promise.all(Object.entries({ players: "players", usage: "usage", outlook: "outlook", acc: "accuracy", ...(S.teams ? { teams: "teams" } : {}) }).map(async ([k, path]) => {
     try { const v = await api(path, { auth: false }); if (JSON.stringify(v) !== JSON.stringify(S[k])) { S[k] = v; changed = true; } delete S.errors[k]; } catch { /* keep what is on screen */ }
   }));
   S.sharedAt = Date.now(); if (changed) { invalidate(); render(); } return changed;
+}
+
+// The team figures load the first time a team screen opens, not at startup.
+export async function loadTeams(force = false) {
+  if (S._teamsBusy || (S.teams && !force)) return; S._teamsBusy = true;
+  try { const v = await api("teams", { auth: false }); if (!v?.teams || !Array.isArray(v.order)) throw new Error("Team data came back in an unexpected form"); S.teams = v; delete S.errors.teams; } catch (e) { S.errors.teams = e.message; }
+  S._teamsBusy = false; invalidate(); render();
 }
 
 // Save the profile (debounced by api.js) and redraw.

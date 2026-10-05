@@ -18,22 +18,17 @@ export function parseCsv(text) {
   return body.filter((r) => r.length === head.length).map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]])));
 }
 
-// nflverse schedule, including closing spreads/totals for finished games.
-export async function schedule(season) {
-  return cached(`schedule-${season}`, 12 * 3600e3, async () => {
+// nflverse schedule, including closing spreads/totals for finished games. The file holds every season, so it is downloaded and parsed once and shared.
+const NA = (v) => (v === "" || v === "NA" || v == null ? null : Number(v));
+async function allGames() {
+  return cached("schedule-file", 12 * 3600e3, async () => {
     const r = await fetch("https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv");
     if (!r.ok) throw new Error(`nflverse schedule ${r.status}`);
-    return parseCsv(await r.text())
-      .filter((g) => Number(g.season) === Number(season) && g.game_type === "REG")
-      .map((g) => ({
-        week: Number(g.week), gameday: g.gameday, home: fix(g.home_team), away: fix(g.away_team),
-        spread: g.spread_line === "" || g.spread_line === "NA" ? null : Number(g.spread_line),
-        total: g.total_line === "" || g.total_line === "NA" ? null : Number(g.total_line),
-        hs: g.home_score === "" || g.home_score === "NA" ? null : Number(g.home_score),
-        as: g.away_score === "" || g.away_score === "NA" ? null : Number(g.away_score),
-      }));
+    return parseCsv(await r.text()).filter((g) => g.game_type === "REG" && Number(g.season) >= 2015)
+      .map((g) => ({ season: Number(g.season), week: Number(g.week), gameday: g.gameday, home: fix(g.home_team), away: fix(g.away_team), spread: NA(g.spread_line), total: NA(g.total_line), hs: NA(g.home_score), as: NA(g.away_score), neutral: g.location === "Neutral" }));
   });
 }
+export async function schedule(season) { return (await allGames()).filter((g) => g.season === Number(season)).map(({ season: _s, ...g }) => g); }
 
 export async function weekOfGames(season, games) {
   try {

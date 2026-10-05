@@ -80,7 +80,7 @@ export function makeRow(id, { players, usage, feed, games }) {
   const wx = g?.forecast || null;
   const av = availability(p.i, feed.injuries?.players?.[id]);
   return {
-    id, stOfficial: av.official, minsToKick: minsTo(g), pos: p.p, team: p.t, opp: c?.opp || null, bye: !!(feed.games?.length && p.t && !g), gameId: g?.id || null,
+    id, stOfficial: av.official, minsToKick: minsTo(g), pos: p.p, team: p.t, opp: c?.opp || null, bye: !!(feed.games?.length && p.t && !g), noTeam: !p.t, gameId: g?.id || null,
     home: c ? c.home : null, imp: c?.imp ?? null, oppImp: c?.oppImp ?? null, spread: c?.spread ?? null, total: c?.total ?? null,
     n: u?.n ?? 0, form: u?.form ?? null, tgt: u?.tgt ?? null, car: u?.car ?? null, ts: u?.ts ?? null,
     dvp: c && usage?.dvp?.[c.opp]?.[p.p] != null ? usage.dvp[c.opp][p.p] : null,
@@ -127,6 +127,8 @@ function consensus(row, share = SLEEPER_SHARE) {
 
 export function project(row, { sleeperShare } = {}) {
   const M = MODEL.pos[row.pos];
+  // A free agent with no team is not expected to play, so he gets no projection until he signs (the same way a bye or an injury does).
+  if (row.noTeam) return { kind: "none", noTeam: true, mean: 0, sd: 1, pre: 0, model: null, experts: null, sleeper: null, parts: null, weights: { model: 0, experts: 0 } };
   // Role check: the stat model reads past usage and cannot see who is starting now. When the experts project a player at less than half of
   // the model's number, they know his role has changed (a backup whose history comes from old starts), so the model sits him out this week.
   let m = modelPPR(row); const c = consensus(row, sleeperShare ?? SLEEPER_SHARE), roleUnclear = !!(m && c && c.pts < 0.5 * m.ppr); if (roleUnclear) m = null;

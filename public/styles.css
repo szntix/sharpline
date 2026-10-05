@@ -390,8 +390,10 @@ details > summary { cursor: pointer; }
   .weeknav button { width: 40px; }
   .bsel .lab { display: none; } .band { padding: 0 10px; }
 }
-:root[data-tint="on"] .row { background: color-mix(in srgb, var(--team, transparent) 12%, var(--slate)); }
-:root[data-tint="on"] .phead { background: color-mix(in srgb, var(--team, transparent) 6%, var(--slate)); }
+/* "Team color on player rows" tints player rows only. Profile headers, teams and games are always colored. */
+:root[data-tint="on"] .row[data-go^="player/"] { background: color-mix(in srgb, var(--team, transparent) 12%, var(--slate)); }
+.row[data-go^="team/"], .row[data-go^="game/"] { background: color-mix(in srgb, var(--team, transparent) 12%, var(--slate)); }
+.phead { background: color-mix(in srgb, var(--team, transparent) 6%, var(--slate)); }
 /* Small phones: smaller team blocks so the slate bar keeps some length. The columns stay fixed, so every bar still lines up. */
 @media (max-width: 359px) {
   .tug { grid-template-columns: 76px minmax(0, 1fr) 76px; gap: 6px; }
@@ -492,3 +494,24 @@ a.tile:focus-visible, .statrow:focus-visible { outline: 2px solid var(--link); o
 .row.trade .who .sub .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; } .row.trade .who .sub { white-space: normal; }
 /* The caption under a number and the matchup meter take the same height (18px), so list rows are the same height whether or not a meter shows. */
 .row .proj > small { display: block; min-height: 18px; line-height: 18px; margin-top: 0; }
+
+/* Teams */
+.tm-hero { border-top: 5px solid var(--team); } .tm-id { display: flex; gap: 12px; align-items: center; } .tm-name { font-size: 26px; line-height: 1.08; margin: 0; overflow-wrap: anywhere; }
+.tm-rate { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; } .tm-big { font: 800 44px/1 var(--font); font-stretch: 75%; color: var(--ti); }
+.tm-cap { color: var(--ink2); font-size: 12.5px; line-height: 1.4; margin-top: 8px; } .tm-cap a, .tm-key a { color: inherit; }
+.tm-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; } .tm-odds { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; }
+.tm-rk { display: grid; grid-template-columns: 92px 1fr 104px; gap: 10px; align-items: center; min-height: 36px; font-size: 14px; } .tm-v { color: var(--ti, var(--ink)); }
+.tm-tr { height: 10px; border-radius: 5px; background: var(--hair2); position: relative; } .tm-tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--ti); }
+.tm-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink2); } .tm-dot { position: absolute; top: -3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--ink); border: 3px solid var(--paper); box-sizing: border-box; }
+.tm-stack { display: flex; height: 20px; border-radius: 6px; overflow: hidden; margin: 8px 0 2px; } .tm-stack .rest { flex: 1; background: var(--hair2); } .tm-key { display: inline-flex; gap: 5px; align-items: center; margin: 4px 12px 0 0; font-size: 13px; } .tm-key i { width: 10px; height: 10px; border-radius: 3px; }
+.tm-chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; } .tm-chip { border-radius: 10px; padding: 7px 2px; text-align: center; font-size: 12px; line-height: 1.25; background: color-mix(in srgb, var(--ti) 16%, var(--paper)); color: var(--ti); font-weight: 700; }
+.tm-chip small { display: block; font-weight: 600; color: var(--ink2); font-size: 10.5px; } .tm-chip.po { outline: 2px solid var(--ink2); outline-offset: 1px; } .tm-chip.dim { background: none; border: 1px dashed var(--hair2); color: var(--ink2); }   /* dimmed by dropping the color fill, not by fading the text, so it stays readable */ .tm-chip.bye { background: none; border: 1px dashed var(--hair2); color: var(--ink2); }
+.tm-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--ti); margin: 0 5px 0 0; } .tm-sw + .tm-sw, .tm-cap .tm-sw:not(:first-child) { margin-left: 12px; } .tm-po { display: inline-block; border: 2px solid var(--ink2); border-radius: 4px; padding: 0 5px; margin: 0 4px 0 12px; }
+.tm-chg { font-weight: 800; color: var(--ti, var(--ink2)); }
+.tm-rkn { display: inline-block; min-width: 24px; color: var(--ink2); font-weight: 800; margin-right: 4px; }
+.srct th.odd { font-weight: 800; } .srct th small { display: block; font-weight: 500; color: var(--ink2); font-size: 11.5px; }
+
+.tm-strip { display: flex; align-items: center; gap: 12px; margin-top: 12px; text-decoration: none; color: inherit; border-left: 5px solid var(--team); } .tm-strip > div { flex: 1; min-width: 0; } .tm-go { font-size: 22px; color: var(--ink2); }
+.tm-stack .me { outline: 2px solid var(--ink); outline-offset: -2px; } .tm-key.me { font-weight: 800; }
+.tm-wk { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; color: var(--ink2); font-size: 12px; margin-top: 6px; }
+.gh a.ab { color: inherit; text-decoration: none; display: inline-block; }

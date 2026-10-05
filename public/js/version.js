@@ -1,2 +1,2 @@
 // The build you are running. Shown in Leagues, Account and data, and on any error screen, so a screenshot tells which build it was.
-export const VERSION = "3.16.0", BUILT = "2026-10-04";
+export const VERSION = "3.18.0", BUILT = "2026-10-05";

@@ -49,7 +49,7 @@ export function buildProjections(ctx, league) {
   for (const [id, p] of Object.entries(players)) {
     const team = p.t, g = games[team] || null, c = teamContext(g, team);
     const bye = haveSchedule && !!team && !g;
-    const base = { id, team, opp: oppOf[team] || null, game: g, implied: c?.imp ?? null, oppImplied: c?.oppImp ?? null, spread: c?.spread ?? null, total: c?.total ?? null, wx: g?.forecast || null, bye };
+    const base = { id, team, opp: oppOf[team] || null, game: g, implied: c?.imp ?? null, oppImplied: c?.oppImp ?? null, spread: c?.spread ?? null, total: c?.total ?? null, wx: g?.forecast || null, bye, noTeam: !team };
     if (p.p === "DEF") {
       const st = defenseStats(c?.imp, c?.oppImp, c?.spread ?? 0);
       const mean = st && !bye ? points(st, s, "DEF") : 0, [a, b] = STUDY.volatility.DEF;
@@ -198,7 +198,7 @@ export function rosValues(ctx, league, P) {
   const avg = outlook?.leagueAvgImplied || 22.5;
   const out = {};
   for (const [id, p] of Object.entries(players)) {
-    const pr = proj[id]; if (!pr) continue;
+    const pr = proj[id]; if (!pr || pr.noTeam) continue;      // no team, no rest-of-season value until he signs
     const u = usage?.players?.[id];
     const ratio = pr.lscale ?? 1;
     const healthy = pr.mean > 0 ? pr.mean : pr.cons || 0;
@@ -533,4 +533,31 @@ export function heat(usage, players) {
   }
   const hot = [...rows].sort((a, b) => b.gap - a.gap).slice(0, 8), cold = [...rows].sort((a, b) => a.gap - b.gap).slice(0, 8);
   return { rows, hot, cold, hotIds: new Set(hot.map((r) => r.id)), coldIds: new Set(cold.map((r) => r.id)) };
+}
+
+// Late flex (for the Week lineup only). Same players, same total: the flex-type slots go to the players whose games kick off latest, so a late swap stays possible.
+// A bench player may also take a flex slot over the one the optimizer picked, but only as a tie: his projection is within `tie` points, nobody involved is hurt,
+// his game is at least `gap` later, and the total given up never passes `maxCost`. Games already under way are never rearranged toward.
+export function lateFlex({ starters, bench }, { value, posOf, kickoff, status, now = Date.now(), tie = 0.5, gap = 3 * 3600e3, maxCost = 1.0 }) {
+  const S = starters.map((s) => ({ ...s })), B = [...bench], moves = [];
+  const isFlex = (slot) => (SLOT_ELIG[slot]?.length || 0) > 1, elig = (slot, id) => !!id && !!SLOT_ELIG[slot]?.includes(posOf(id)), t = (id) => (id ? kickoff(id) : null), open = (id) => { const k = t(id); return k != null && k > now; };
+  const arrange = () => {
+    for (let guard = 0, changed = true; changed && guard < 50; guard++) { changed = false;
+      for (let f = 0; f < S.length; f++) {
+        if (!isFlex(S[f].slot) || !S[f].id || t(S[f].id) == null) continue;      // no kickoff time, no preference
+        let best = -1; const curT = open(S[f].id) ? t(S[f].id) : -Infinity;
+        for (let k = 0; k < S.length; k++) { if (k === f || !S[k].id || isFlex(S[k].slot) || !open(S[k].id) || !(t(S[k].id) > curT) || !elig(S[f].slot, S[k].id) || !elig(S[k].slot, S[f].id)) continue; if (best < 0 || t(S[k].id) > t(S[best].id)) best = k; }
+        if (best >= 0) { const a = S[f], b = S[best]; [a.id, b.id] = [b.id, a.id]; [a.v, b.v] = [b.v, a.v]; moves.push({ kind: "swap", id: a.id, slot: a.slot, t: t(a.id) }); changed = true; }
+      } }
+  };
+  arrange();
+  let cost = 0;
+  for (let f = 0; f < S.length; f++) {
+    if (!isFlex(S[f].slot) || !S[f].id || status(S[f].id)) continue;
+    const cur = S[f].id; if (t(cur) == null) continue; const curT = open(cur) ? t(cur) : -Infinity; let pick = null;
+    for (const c of B) { if (!elig(S[f].slot, c) || status(c) || !open(c)) continue; const d = value(cur) - value(c); if (d < 0 || d > tie || cost + d > maxCost || !(t(c) >= curT + gap)) continue; if (!pick || t(c) > t(pick.c) || (t(c) === t(pick.c) && d < pick.d)) pick = { c, d }; }
+    if (pick) { B[B.indexOf(pick.c)] = cur; S[f] = { ...S[f], id: pick.c, v: value(pick.c) }; cost += pick.d; moves.push({ kind: "sub", id: pick.c, out: cur, slot: S[f].slot, t: t(pick.c), cost: pick.d }); }
+  }
+  if (moves.some((x) => x.kind === "sub")) arrange();
+  return { starters: S, bench: B, total: S.reduce((s, x) => s + (x.v || 0), 0), cost, moves, tie };
 }

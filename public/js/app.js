@@ -1,12 +1,13 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, pl, pname } from "./state.js";
+import { refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
 import { VERSION } from "./version.js";
 import { viewWeek } from "./views/week.js";
+import { viewTeam } from "./views/teams.js";
 import { viewSlate, viewGame } from "./views/slate.js";
 import { viewPlayers } from "./views/players.js";
 import { viewPlayer } from "./views/player.js";
@@ -47,11 +48,11 @@ const ICON = {
   prev: I('<path d="M14.5 6l-6 6 6 6"/>'), next: I('<path d="M9.5 6l6 6-6 6"/>'),
 };
 const TABS = [["week", "Week"], ["slate", "Slate"], ["players", "Players"], ["moves", "Moves"], ["proof", "Proof"]];
-const TAB_OF = { week: "week", slate: "slate", game: "slate", players: "players", player: "players", compare: "players", stat: "players", moves: "moves", proof: "proof" };
+const TAB_OF = { week: "week", slate: "slate", game: "slate", team: "slate", players: "players", player: "players", compare: "players", stat: "players", moves: "moves", proof: "proof" };
 
 function parseRoute() {
   const [name = "week", ...args] = (location.hash.slice(1) || "week").split("/");
-  return { name: ["week", "slate", "game", "players", "player", "compare", "stat", "moves", "proof", "leagues"].includes(name) ? name : "week", args };
+  return { name: ["week", "slate", "game", "team", "players", "player", "compare", "stat", "moves", "proof", "leagues"].includes(name) ? name : "week", args };
 }
 
 function render() {
@@ -64,7 +65,7 @@ function render() {
   const { name, args } = S.route;
   let body = "";
   try {
-    body = { week: viewWeek, slate: viewSlate, game: () => viewGame(args[0]), players: viewPlayers, player: () => viewPlayer(args[0]), compare: () => viewCompare(args[0], args[1]), stat: () => viewStat(args[0], args[1], args[2]), moves: viewMoves, proof: viewProof, leagues: viewLeagues }[name]();
+    body = { week: viewWeek, slate: viewSlate, game: () => viewGame(args[0]), team: () => viewTeam(args[0]), players: viewPlayers, player: () => viewPlayer(args[0]), compare: () => viewCompare(args[0], args[1]), stat: () => viewStat(args[0], args[1], args[2]), moves: viewMoves, proof: viewProof, leagues: viewLeagues }[name]();
   } catch (e) { console.error(e); body = `<div class="panel empty"><h2 class="h2">Something went wrong on this screen</h2><p class="muted small" style="margin:6px 0 14px">${esc(e.message)}<br>Version ${VERSION}</p><a class="btn primary" href="#week">Back to the week</a></div>`; }
   const wk = S.feed?.week ?? S.week, atNow = S.activeWeek == null || wk === S.activeWeek;
   $app.innerHTML = `<header class="top"><a class="brand" href="#week" aria-label="Sharpline home">${LOGO}<span>Sharpline</span></a>
@@ -131,7 +132,7 @@ function autoRefresh() {
   ensureRosters(10 * 60e3);
   if (Date.now() - (S.sharedAt || 0) > 2 * 3600e3 && !S._sharedBusy) { S._sharedBusy = true; S._keepScroll = true; refreshSharedQuiet().finally(() => { S._sharedBusy = false; S._keepScroll = false; }); }
   if (Date.now() - (S.feedAt || 0) < nextRefreshMs(S.feed)) return;
-  S._keepScroll = true; refreshFeedQuiet().finally(() => { S._keepScroll = false; });
+  S._keepScroll = true; refreshFeedQuiet().then((r) => { if (r === "advanced") toast(`Week ${S.week} is here`); }).finally(() => { S._keepScroll = false; });
 }
 setInterval(autoRefresh, 20e3);
 document.addEventListener("visibilitychange", autoRefresh);
@@ -187,7 +188,7 @@ $app.addEventListener("click", async (e) => {
   if (el.tagName === "SELECT") return;      // dropdowns act on "change", not on the tap that opens them
   const a = el.dataset.act, id = el.dataset.id, v = el.dataset.v, L = league();
   switch (a) {
-    case "reload": { S.errors = {}; el.disabled = true; await loadFeed(S.week); loadData(); toast("Checked for new data"); break; }
+    case "reload": { S.errors = {}; el.disabled = true; await loadFeed(S.week === S.activeWeek ? null : S.week); loadData(); toast("Checked for new data"); break; }
     case "wk-prev": await loadFeed((S.feed?.week || 1) - 1); break;
     case "wk-next": await loadFeed((S.feed?.week || 1) + 1); break;
     case "wk-now": await loadFeed(null); S.week = S.activeWeek; break;
@@ -197,6 +198,8 @@ $app.addEventListener("click", async (e) => {
     case "pick-cmp": { const i = S.ui.pick.indexOf(id); if (i >= 0) S.ui.pick.splice(i, 1); else { if (S.ui.pick.length >= 2) S.ui.pick.shift(); S.ui.pick.push(id); } render(); break; }
     case "cmp-go": { const [x, y] = S.ui.pick; S.ui.pick = []; location.hash = `compare/${x}/${y}`; break; }
     case "cmp-clear": S.ui.pick = []; render(); break;
+    case "slate-view": S.ui.slateView = v; render(); break;
+    case "teams-retry": delete S.errors.teams; loadTeams(true); break;
     case "moves-tab": if (v === "trades" && S.ui.moves !== "trades") { S.ui.partner = ""; S.ui.give = []; S.ui.get = []; } S.ui.moves = v; render(); break;
     case "st-filter": S.ui.plFilter = v; render(); break;
     case "proof-pos": S.ui.proofPos = v; render(); break;

@@ -1,7 +1,7 @@
 import { SOURCES, S, pl, league, computed } from "../state.js";
 import { signals } from "../engine.js";
 import { esc, f1, ago, agoShort, kickoffText, posLabel, statusChip, posClass, plate, teamStripe } from "../ui.js";
-import { SLOT_LABEL } from "../scoring.js";
+import { SLOT_ELIG, SLOT_LABEL } from "../scoring.js";
 
 export const SRC_NOTE = { blend: "", experts: "experts only", sleeper: "Sleeper only", model: "model only", lines: "estimate", none: "no line", bye: "bye" };
 
@@ -49,13 +49,14 @@ export function prow(id, C, { slot = null, sig = false, act = "", dim = false, p
   // Under the number: the matchup meter when the model covers him. A caption appears only for exceptions (an estimate, a bye, a number kept from Blended).
   const mu = C.mu?.[id], exception = srcWord ? (pr?.srcMissing ? "blended" : "") : (/estimate|bye|injur|no /i.test(note) ? note : "");
   const under = `${mu ? mmHtml(mu) : ""}${exception ? `<small>${esc(exception)}</small>` : mu ? "" : "<small>&nbsp;</small>"}`;
-  const shownNum = `<span class="num">${pr?.mean > 0 || (!srcWord && (pr?.src === "none" || pr?.bye)) ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span>${under}`;
+  const shownNum = `<span class="num">${pr?.noTeam ? "–" : pr?.mean > 0 || (!srcWord && (pr?.src === "none" || pr?.bye)) ? f1(pr?.mean) : pr?.mean === 0 ? "0.0" : "–"}</span>${under}`;
+  const flexy = !!slot && (SLOT_ELIG[slot]?.length || 0) > 1;   // a flex-type slot wears the color of the position playing it
   const lead = pick ? `<button class="pick" aria-label="Select ${esc(p.n)} to compare" aria-pressed="${S.ui.pick.includes(id)}" data-act="pick-cmp" data-id="${id}"></button>`
-    : slot ? `<span class="pos ${posClass(slot)}">${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
+    : slot ? `<span class="pos ${posClass(flexy ? pos : slot)}"${flexy ? ` title="${esc(SLOT_LABEL[slot] || slot)}, ${esc(posLabel(pos))}" aria-label="${esc(SLOT_LABEL[slot] || slot)} slot, ${esc(posLabel(pos))}"` : ""}>${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
   return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
     ${lead}
-    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
-      <span class="sub"><span class="meta">${esc(where || p.t || "FA")}${exp}</span></span></div>
+    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || flexy || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
+      <span class="sub"><span class="meta">${esc(where || p.t || "No team")}${exp}</span></span></div>
     <div class="proj">${shownNum}</div>
     ${act || gainHtml ? `<div class="act">${act}${gainHtml}</div>` : ""}</div>`;
 }
