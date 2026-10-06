@@ -1,4 +1,4 @@
-import { teamStrip, playerTeamSections } from "./teams.js";
+import { teamStrip, playerTeamSections, defenseHow, kickerHow, scheduleSection } from "./teams.js";
 import { ADV, ADV_BY_POS, peerList, gradeOf, rankLabel, whyNot, whyShort } from "./advstats.js";
 import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
@@ -48,7 +48,7 @@ export function viewPlayer(id) {
       <div class="ctx">${ctxBits.map((b) => `<span>${b}</span>`).join("")}</div>${head}
       ${chips.length ? `<div class="chipline">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
       <div class="toolbar"><a class="btn primary" href="#compare/${id}">Compare with…</a>${L && !L.roster.includes(id) ? `<button class="btn" data-act="add-mine" data-id="${id}">Add to my team</button>` : ""}</div></section>`;
-  if (out) return feedError() + hero + teamStrip(pos === "DEF" ? null : p.t) + notesSection(id, C);
+  if (out) return feedError() + hero + teamStrip(p.t) + notesSection(id, C);
 
   // 1. How likely is a big game
   const thr = S.ui.thr[id] ?? defaultThr(pr, pos), opts = thrOptions(pr), max = axisMax([pr]);
@@ -129,7 +129,7 @@ export function viewPlayer(id) {
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
   if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
-  return feedError() + hero + teamStrip(pos === "DEF" ? null : p.t) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + playerTeamSections(id, p, u);
+  return feedError() + hero + teamStrip(p.t) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + (pos === "DEF" ? defenseHow(p.t) + scheduleSection(p.t, "defense") : pos === "K" ? kickerHow(p.t, pr, L?.scoring || leagueOrDefault().scoring) + scheduleSection(p.t, "kicker") : playerTeamSections(id, p, u));
 }
 
 function notesSection(id, C) {

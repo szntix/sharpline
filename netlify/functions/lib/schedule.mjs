@@ -25,7 +25,7 @@ async function allGames() {
     const r = await fetch("https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv");
     if (!r.ok) throw new Error(`nflverse schedule ${r.status}`);
     return parseCsv(await r.text()).filter((g) => g.game_type === "REG" && Number(g.season) >= 2015)
-      .map((g) => ({ season: Number(g.season), week: Number(g.week), gameday: g.gameday, home: fix(g.home_team), away: fix(g.away_team), spread: NA(g.spread_line), total: NA(g.total_line), hs: NA(g.home_score), as: NA(g.away_score), neutral: g.location === "Neutral" }));
+      .map((g) => ({ season: Number(g.season), week: Number(g.week), gameday: g.gameday, home: fix(g.home_team), away: fix(g.away_team), spread: NA(g.spread_line), total: NA(g.total_line), hs: NA(g.home_score), as: NA(g.away_score), neutral: g.location === "Neutral", roof: g.roof && g.roof !== "NA" ? String(g.roof) : null }));
   });
 }
 export async function schedule(season) { return (await allGames()).filter((g) => g.season === Number(season)).map(({ season: _s, ...g }) => g); }

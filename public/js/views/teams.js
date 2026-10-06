@@ -1,6 +1,10 @@
 // Teams: the power rankings (a second view inside Slate) and one page per team. Ratings describe how a team has played, opponent-adjusted and blended with
 // what the betting lines say. They are not a forecast: in a 3,408-game test the closing line beat every rating we could build, so win odds come from the line.
-import { S, loadTeams, league } from "../state.js";
+import { S, loadTeams, league, leagueOrDefault, computed } from "../state.js";
+import { points } from "../scoring.js";
+import { defenseStats } from "../model.js";
+import { lookAhead } from "../lookahead.js";
+import { kickerConditions } from "../conditions.js";
 import { esc, plate, teamStripe, sgn, emblem } from "../ui.js";
 import { sec, fold, loading } from "./shared.js";
 
@@ -30,14 +34,63 @@ const rankBar = (label, o, fmt) => !o ? `<div class="tm-rk"><span>${label}</span
   : `<div class="tm-rk tone-${rankTone(o.rank)}"><span>${label}</span><div class="tm-tr"><i style="width:${(((33 - o.rank) / 32) * 100).toFixed(0)}%"></i></div><span style="text-align:right"><b class="tm-v">${fmt(o.v)}</b> <span class="muted small">#${o.rank}</span></span></div>`;
 
 // ---------- the rankings ----------
+// ---- a team's remaining schedule, as chips, for three audiences: offensive players (the team page), defenses, and kickers ----
+const roofText = (r) => (r === "dome" || r === "closed" ? "Roof" : r === "open" || r === "outdoors" ? "Open air" : "\u2013");
+// How each remaining game rates for this DEFENSE, ranked 1 (best) to 32 among every defense playing that week. This week uses the betting line, the same number as
+// its lineup projection; later weeks have no line, so they are rough: the opponent's scoring and this defense's points allowed, season to date.
+export function defenseWeeks(code, { from, to = 18 } = {}) {
+  const D = S.teams?.teams ? S.teams : null, t = D?.teams?.[code]; if (!t || !Number.isFinite(from)) return [];
+  const s = (league() || leagueOrDefault()).scoring, wkNow = S.feed?.week ?? -1, proj = computed().P.proj, memo = {};
+  const rough = (c, a) => { const me = D.teams[c], o = D.teams[a.opp]; return me && o && o.pf && me.pa ? points(defenseStats(22, (o.pf + me.pa) / 2, 0), s, "DEF") : null; };
+  const roughAll = (w) => memo[w] ||= D.order.map((c) => { const a = D.teams[c].ahead.find((x) => x.week === w); return a ? rough(c, a) : null; }).filter((v) => v != null);
+  const nowAll = () => memo.now ||= Object.keys(S.players || {}).filter((id) => S.players[id].p === "DEF" && proj[id] && !proj[id].bye && proj[id].mean != null).map((id) => proj[id].mean);
+  return lookAhead(code, from - 1, D.teams, to - from + 1).map((x) => {
+    if (x.bye) return x;
+    const a = t.ahead.find((g) => g.week === x.week), line = x.week === wkNow && proj[code] && !proj[code].bye && proj[code].mean != null;
+    const exp = line ? proj[code].mean : rough(code, a), all = line ? nowAll() : roughAll(x.week), rank = exp == null || !all.length ? null : 1 + all.filter((v) => v > exp + 1e-9).length;
+    return { ...x, home: !!(a.neutral || a.home), exp, rank, kind: line ? "now" : "rough" };
+  });
+}
+export function scheduleSection(code, mode = "offense") {
+  const D = S.teams?.teams ? S.teams : null, t = D?.teams?.[code]; if (!t) return "";
+  const L = league(), ps = L?.playoffStart ?? 15, we = L?.endWeek ?? 17, nx = t.ahead[0], first = nx ? nx.week : 18, chips = [];
+  const dw = mode === "defense" ? new Map(defenseWeeks(code, { from: first }).map((x) => [x.week, x])) : null;
+  for (let w = first; w <= 18; w++) {
+    const a = t.ahead.find((x) => x.week === w), po = w >= ps && w <= we, cls = `${po ? " po" : ""}${w > we ? " dim" : ""}`;
+    if (!a) { if (t.bye.includes(w)) chips.push(`<div class="tm-chip bye${cls}">WK ${w}<small>bye</small></div>`); continue; }
+    const vs = a.neutral || a.home ? "vs" : "@";
+    if (mode === "defense") { const m = dw.get(w); chips.push(`<div class="tm-chip tone-${m?.rank ? rankTone(m.rank) : "n"}${cls}" data-wk="${w}">WK ${w}<br>${vs} ${a.opp}<small>${m?.rank ? `M #${m.rank}` : "M \u2013"}</small></div>`); }
+    else if (mode === "kicker") chips.push(`<div class="tm-chip tone-${a.roof === "dome" || a.roof === "closed" ? "g1" : "n"}${cls}" data-wk="${w}">WK ${w}<br>${vs} ${a.opp}<small>${roofText(a.roof)}</small></div>`);
+    else { const dr = D.teams[a.opp]?.eff.defRank; chips.push(`<div class="tm-chip tone-${dr ? softTone(dr) : "n"}${cls}">WK ${w}<br>${vs} ${a.opp}<small>${dr ? `D #${dr}` : "D \u2013"}</small></div>`); }
+  }
+  const tail = `${we < 18 ? " Week 18 is dimmed: most leagues are over by then, and teams that have clinched often rest starters." : ""}`, po = `<span class="tm-po">outlined</span> your league's playoff weeks (${ps} to ${we}).`;
+  const cap = mode === "defense" ? `<span class="tm-sw tone-g2"></span>good matchup <span class="tm-sw tone-b2"></span>tough matchup ${po} M # ranks the matchup for a defense among all defenses playing that week (1 is best). This week's rank comes from the betting line; later weeks are rough, from the opponent's scoring and this defense's points allowed.${tail}`
+    : mode === "kicker" ? `<span class="tm-sw tone-g1"></span>roof or dome ${po} A roof is worth about a point a week to a kicker; wind and cold appear in the forecast near game day. The roof is the home team's stadium.${tail}`
+    : `<span class="tm-sw tone-g2"></span>soft defense <span class="tm-sw tone-b2"></span>tough defense ${po} D # is the opponent's defense rank, all plays, this season so far.${tail}`;
+  return sec("Schedule ahead", chips.length ? `<div class="tm-chips">${chips.join("")}</div><p class="tm-cap">${cap}</p>` : `<p class="muted small">The regular season is over.</p>`, `weeks ${first} to 18`);
+}
+// Team-profile numbers that matter for a defense or a kicker, on their own page.
+const tile = (label, val, rank) => `<div class="dp-tile tone-${rankTone(rank)}"><small>${label}</small><b>${val}</b><span>#${rank}</span></div>`;
+export function defenseHow(code) {
+  const D = S.teams?.teams ? S.teams : null, t = D?.teams?.[code]; if (!t || !t.games || !t.eff) return "";
+  const pa = 1 + D.order.filter((c) => D.teams[c].games && D.teams[c].pa < t.pa - 1e-9).length, e = t.eff, epa = (v) => `${v < 0 ? "\u2212" : "+"}${Math.abs(v).toFixed(2)} a play`;
+  return sec("How this defense has played", `<div class="panel"><div class="dp-tiles">${tile("Points allowed", `${t.pa.toFixed(1)} a game`, pa)}${tile("Overall, adjusted", `rank ${e.defRank}`, e.defRank)}${tile("Pass defense", epa(e.passDef.v), e.passDef.rank)}${tile("Run defense", epa(e.runDef.v), e.runDef.rank)}</div><p class="tm-cap">Ranks out of 32, 1 is best. Opponent-adjusted and counting all plays, this season so far. Fewer points allowed and a lower number a play are better for a defense.</p></div>`);
+}
+export function kickerHow(code, pr, s) {
+  const D = S.teams?.teams ? S.teams : null, t = D?.teams?.[code]; if (!t || !t.games || !t.eff) return "";
+  const pf = 1 + D.order.filter((c) => D.teams[c].games && D.teams[c].pf > t.pf + 1e-9).length, e = t.eff, c = pr ? kickerConditions(pr, s) : null;
+  return sec("His offense", `<div class="panel"><div class="dp-tiles">${tile("Points scored", `${t.pf.toFixed(1)} a game`, pf)}${tile("Passing offense", `rank ${e.passOff.rank}`, e.passOff.rank)}${tile("Rushing offense", `rank ${e.runOff.rank}`, e.runOff.rank)}</div>${c ? `<p style="margin:12px 0 0"><b>This week:</b> ${esc(c.text)}${c.d ? ` (${c.d >= 0 ? "+" : "\u2212"}${Math.abs(c.d).toFixed(1)} points against a mild outdoor game)` : ""}</p>` : ""}<p class="tm-cap">What moves a kicker is how many points his team is expected to score, whether it is favored, and the weather. Ranks out of 32, 1 is best.</p></div>`);
+}
+
 export function viewTeams() {
   const D = S.teams;
   if (!D) { if (!S.errors.teams) loadTeams(); return S.errors.teams ? `<div class="panel empty"><h2 class="h2">Team data is unavailable</h2><p class="muted small" style="margin:6px 0 12px">${esc(S.errors.teams)}</p><button class="btn" data-act="teams-retry">Try again</button></div>` : loading("the teams"); }
   const rows = D.order.map((c) => { const t = D.teams[c], d = t.prevRank - t.rank, nx = t.ahead[0], chg = t.games < 2 || !d ? `<small class="tm-chg">–</small>` : `<small class="tm-chg tone-${d > 0 ? "g2" : "b2"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</small>`;
     return `<div class="row rowlink" data-go="team/${c}" style="--team:${teamStripe(c)}">${plate(c)}<div class="who"><span class="name"><span class="tm-rkn">${t.rank}</span><span class="nm">${esc(t.name)}</span></span><span class="sub"><span class="meta">${t.record[0]}–${t.record[1]}${t.record[2] ? `–${t.record[2]}` : ""}${nx ? ` · ${nx.home ? "vs" : "at"} ${nx.opp}` : ""}</span></span></div><div class="proj"><span class="num tone-${rankTone(t.rank)}">${sgn(t.rating, 1)}</span>${chg}</div></div>`; }).join("");
-  const early = D.throughWeek < 3 ? fold("teams-early", "Early in the season", `Only ${D.throughWeek} ${D.throughWeek === 1 ? "week" : "weeks"} played, so ratings lean on last season until week 3.`, { headline: "Ratings lean on last season until week 3", tone: "b1" }) : "";
+  const off = D.fallback ? fold("teams-offseason", "Last season's table", `The ${D.fallback.wanted} schedule is not out yet, so this is the final ${D.fallback.season} table. It switches to ${D.fallback.wanted} on its own once the schedule is published.`, { headline: `The ${D.fallback.wanted} schedule is not out yet`, tone: "b1" }) : "";
+  const early = D.fallback ? "" : D.throughWeek < 3 ? fold("teams-early", "Early in the season", `Only ${D.throughWeek} ${D.throughWeek === 1 ? "week" : "weeks"} played, so ratings lean on last season until week 3.`, { headline: "Ratings lean on last season until week 3", tone: "b1" }) : "";
   const b = D.backtest;
-  return `<h1 class="h1" style="margin-top:8px">Team rankings</h1><p class="lede" style="margin-top:8px">All 32 teams by rating: points better than an average team on a neutral field, adjusted for who they played and blended with what the betting lines say. It describes how they have played; it is not a forecast. Tap a team for its profile.</p>${early}
+  return `<h1 class="h1" style="margin-top:8px">Team rankings</h1><p class="lede" style="margin-top:8px">All 32 teams by rating: points better than an average team on a neutral field, adjusted for who they played and blended with what the betting lines say. It describes how they have played; it is not a forecast. Tap a team for its profile.</p>${off}${early}
     <div class="list">${rows}</div>
     ${fold("teamsabout", "How much to trust this", `<p class="small" style="margin-bottom:8px">We tested ratings like these against the closing betting line on ${b.games.toLocaleString()} games from ${esc(b.seasons)}, using only games played before each one.</p><dl class="kv"><dt>Betting line</dt><dd>${pct(b.line.picks)} winners, off by ${b.line.miss.toFixed(1)}</dd><dt>Results and lines blended</dt><dd>${pct(b.blend.picks)} winners, off by ${b.blend.miss.toFixed(1)}</dd><dt>Results only</dt><dd>${pct(b.results.picks)} winners, off by ${b.results.miss.toFixed(1)}</dd></dl><p class="small muted" style="margin-top:8px">So the line is the best forecast available, and win odds on these pages come from it. Beating the line so far has not tended to repeat (correlation ${b.beatTheLineRepeat.toFixed(2)}).</p>`)}`;
 }
@@ -72,12 +125,7 @@ export function viewTeam(codeIn) {
     return `<rect x="${x}" y="${up ? 70 - h : 70}" width="${bw}" height="${Math.max(2, h)}" rx="5" fill="var(${up ? "--up" : "--down"})" opacity=".9"/><text x="${cx}" y="${up ? 70 - h - 6 : 70 + h + 14}" text-anchor="middle" font-size="${n > 8 ? 10 : 13}" font-weight="800" fill="var(--ink)">${g.margin > 0 ? "+" : g.margin < 0 ? "−" : ""}${Math.abs(g.margin)}</text><text x="${cx}" y="${n <= 6 ? 152 : 150}" text-anchor="middle" font-size="${n > 8 ? 9 : 12}" fill="var(--ink2)">${g.neutral || g.home ? "vs" : "@"} ${g.opp}</text>${cov}`; }).join("");
   const season = sec("Season so far", n ? `<div class="panel"><svg width="100%" viewBox="0 0 330 176" role="img" aria-label="Margin of victory or defeat, game by game"><line x1="8" x2="322" y1="70" y2="70" stroke="var(--hair2)"/>${bars}</svg><p class="tm-cap">Margin of victory or defeat each week, with how far they beat or missed the betting line${n > 6 ? " shown as a green or red dot" : " underneath"}. Beating the line has not tended to repeat in past seasons (correlation ${D.backtest.beatTheLineRepeat.toFixed(2)}), so it is context only.</p></div>` : `<p class="muted small">No games played yet.</p>`);
   const volume = sec("Who gets the volume", t.tshare.length ? `<div class="panel"><b>Targets</b>${stack(t.tshare)}<div style="height:14px"></div><b>Carries</b>${stack(t.cshare)}<p class="tm-cap">Share of the team's targets and carries this season. Tap a name for his profile.</p></div>` : `<p class="muted small">No plays to measure yet.</p>`);
-  // schedule ahead: one chip per week, colored by how the opponent's defense has played, with the league's fantasy playoff weeks outlined
-  const first = nx ? nx.week : 18, chips = []; for (let w = first; w <= 18; w++) {
-    const a = t.ahead.find((x) => x.week === w), po = w >= ps && w <= we, cls = `${po ? " po" : ""}${w > we ? " dim" : ""}`;
-    if (!a) { if (t.bye.includes(w)) chips.push(`<div class="tm-chip bye${cls}">WK ${w}<small>bye</small></div>`); continue; }
-    const dr = D.teams[a.opp]?.eff.defRank; chips.push(`<div class="tm-chip tone-${dr ? softTone(dr) : "n"}${cls}">WK ${w}<br>${a.neutral || a.home ? "vs" : "@"} ${a.opp}<small>${dr ? `D #${dr}` : "D –"}</small></div>`); }
-  const ahead = sec("Schedule ahead", chips.length ? `<div class="tm-chips">${chips.join("")}</div><p class="tm-cap"><span class="tm-sw tone-g2"></span>soft defense <span class="tm-sw tone-b2"></span>tough defense <span class="tm-po">outlined</span> your league's playoff weeks (${ps} to ${we}). D # is the opponent's defense rank, all plays, this season so far.${we < 18 ? " Week 18 is dimmed: most leagues are over by then, and teams that have clinched often rest starters." : ""}</p>` : `<p class="muted small">The regular season is over.</p>`, `weeks ${first} to 18`);
+  const ahead = scheduleSection(code, "offense");
   return `<a class="link" href="#slate">‹ Back to Slate</a><div style="margin-top:10px">${hero}</div>${week}${played}${style}${season}${volume}${ahead}`;
 }
 

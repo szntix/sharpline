@@ -3,6 +3,8 @@ import { points, positionsFor } from "../scoring.js";
 import { defenseStats, kickerStats, teamContext } from "../model.js";
 import { esc, f1 } from "../ui.js";
 import { prow, sec } from "./shared.js";
+import { kickerConditions } from "../conditions.js";
+import { defenseWeeks } from "./teams.js";
 
 // Streaming: this week's best defenses and kickers still on waivers, using the same projection as your lineup. Both positions are mostly week-to-week luck, so the
 // honest message is a small, real edge: for defenses it is the opponent's expected score (history: the best available beat an average defense by about 2.9 points
@@ -26,30 +28,20 @@ export function dstChances(games, oppImp, s) {
 let HIST = null, loading = false;
 const loadHist = () => { if (HIST || loading) return; loading = true; import("../dsthistory.js").then((m) => { HIST = m.DST_GAMES; if (S.ui.moves === "stream") render(); }).catch(() => { loading = false; }); };
 
-// What the weather and roof are worth to this kicker this week, in his league's points, against a typical mild outdoor game.
-export function kickerConditions(pr, s) {
-  const c = teamContext(pr.game, pr.team); if (!c || c.imp == null) return null;
-  const indoor = !!pr.game?.venue?.indoor, wx = pr.game?.forecast || null, base = points(kickerStats(c.imp, { spread: c.spread, wx: MILD }), s, "K");
-  const d = points(kickerStats(c.imp, { spread: c.spread, wx, dome: indoor }), s, "K") - base;
-  if (indoor) return { text: `Dome ${sg(d)}`, tone: d >= 0.3 ? "up" : "", d };
-  if (!wx) return { text: "Forecast not out", tone: "", d: 0 };
-  const windy = wx.wind != null && wx.wind >= 15, cold = wx.temp != null && wx.temp <= 35;
-  if (windy && cold) return { text: `Wind and cold ${sg(d)}`, tone: "dn", d };
-  if (windy) return { text: `Wind ${Math.round(wx.wind)} mph ${sg(d)}`, tone: "dn", d };
-  if (cold) return { text: `Cold ${Math.round(wx.temp)}\u00B0F ${sg(d)}`, tone: "dn", d };
-  return { text: "Mild outdoors", tone: "", d };
+// This week and the next three, from the same builder as the defense page and the team page, so they can never disagree. This week uses the betting line (solid
+// border); later weeks are rough (dashed). The tint is the matchup's rank among all defenses that week.
+function ribbon(code) {
+  const wk = S.feed?.week ?? 0, items = defenseWeeks(code, { from: wk, to: wk + 3 });
+  const chips = items.map((x) => x.bye ? `<span class="st-rib">W${x.week} bye</span>` : `<span class="st-rib${x.kind === "now" ? " now" : ""}${x.rank && x.rank <= 10 ? " g" : x.rank && x.rank >= 23 ? " r" : ""}">W${x.week} ${x.home ? "vs" : "@"} ${esc(x.opp)}</span>`);
+  return chips.length ? `<div class="st-ribbon"><small>weeks</small>${chips.join("")}</div>` : "";
 }
 
-// The next three weeks' opponents, colored by how good the matchup looks. Lines are only posted a week ahead, so these are rough: each opponent's scoring this
-// season against this defense's points allowed.
-function ribbon(code, s, mid) {
-  const T = S.teams?.teams, t = T?.[code]; if (!t) return "";
-  const wk = S.feed?.week ?? 0, nxt = (t.ahead || []).filter((a) => a.week > wk).slice(0, 3), chips = nxt.map((a) => {
-    const o = T[a.opp], tone = o && o.pf && t.pa ? (() => { const e = points(defenseStats(22, (o.pf + t.pa) / 2, 0), s, "DEF"); return e >= mid + 1 ? "g" : e <= mid - 1 ? "r" : ""; })() : "";
-    return `<span class="st-rib ${tone}">${a.home ? "" : "@"}${esc(a.opp)}</span>`;
-  });
-  for (const b of t.bye || []) if (b > wk && b <= wk + 3) chips.push(`<span class="st-rib">bye</span>`);
-  return chips.length ? `<div class="st-ribbon"><small>next</small>${chips.join("")}</div>` : "";
+// Who this defense plays this week, spelled out: home or away, the kickoff, and what the line says that offense will score.
+const kickTxt = (ms) => new Date(ms).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }).replace(",", "");
+export function oppLine(pr) {
+  if (!pr?.opp) return "";
+  const g = pr.game, kick = g?.kickoff && Number.isFinite(Date.parse(g.kickoff)) ? kickTxt(Date.parse(g.kickoff)) : "";
+  return `<div class="st-opp" data-opp="${esc(pr.opp)}"><b>${g && g.home === pr.team ? "vs" : "at"} ${esc(pr.opp)}</b>${kick ? ` \u00B7 ${esc(kick)}` : ""}${pr.oppImplied != null ? ` \u00B7 expected to score ${f1(pr.oppImplied)}` : ""}</div>`;
 }
 
 export function viewStreaming(L) {
@@ -66,7 +58,7 @@ export function viewStreaming(L) {
   if (pos.includes("DEF")) {
     const defs = all("DEF"), avail = defs.filter(({ id }) => !taken.has(id)).sort((a, b) => b.pr.mean - a.pr.mean).slice(0, 5), mid = median(defs.map((d) => d.pr.mean)), mi = mineOf("DEF"), best = avail[0];
     const row = ({ id, pr }, i, isMine) => { const ch = dstChances(HIST, pr.oppImplied, s), gain = !isMine && i === 0 && mi && pr.mean - mi.pr.mean > 0.05 ? `+${(pr.mean - mi.pr.mean).toFixed(1)}` : "";
-      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(id, C, { gain })}<div class="st-info">${ch ? chip(`${Math.round(ch.big * 100)}% for 10+`, "up") + chip(`${Math.round(ch.dud * 100)}% dud`, ch.dud >= 0.15 ? "dn" : "") : ""}${pr.oppImplied != null ? chip(`opp. expected ${f1(pr.oppImplied)}`) : ""}</div>${ribbon(pr.team, s, mid)}</div>`; };
+      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(id, C, { gain })}${oppLine(pr)}<div class="st-info">${ch ? chip(`${Math.round(ch.big * 100)}% for 10+`, "up") + chip(`${Math.round(ch.dud * 100)}% dud`, ch.dud >= 0.15 ? "dn" : "") : ""}</div>${ribbon(pr.team)}</div>`; };
     let head = "";
     if (best) { const g = best.pr.mean - (mi ? mi.pr.mean : mean(defs.map((d) => d.pr.mean))), who = mi ? `your ${nick(mi.id)}` : "the average defense", stream = g > 0.3;
       const gap = Math.abs(g) <= 0.3 ? `within a third of a point of ${who}` : `${Math.abs(g).toFixed(1)} points ${g > 0 ? "above" : "below"} ${who}`;

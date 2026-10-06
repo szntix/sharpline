@@ -36,8 +36,12 @@ const r3 = (v) => (v == null ? null : Math.round(v * 1000) / 1000), r1 = (v) => 
 
 export async function computeTeams() {
   return cached("teams-v1", 15 * 60e3, async () => {
-    const state = await nflState(), season = Number(state.season);
-    const [cur, prev, rows, players] = await Promise.all([schedule(season), schedule(season - 1).catch(() => []), cachedConditional(`rows2-${season}`, 50 * 60e3, rowsFetcher(season)).catch(() => []), loadPlayers().catch(() => ({}))]);
+    const state = await nflState(); let season = Number(state.season);
+    // Between the league year turning over and the new schedule being published there are no games for the new season. Until there are, keep showing last
+    // season's final table (and say so) instead of an empty one; it switches by itself the moment the new schedule exists.
+    let cur = await schedule(season), wanted = null;
+    if (!cur.length) { const last = await schedule(season - 1).catch(() => []); if (last.length) { cur = last; wanted = season; season -= 1; } }
+    const [prev, rows, players] = await Promise.all([schedule(season - 1).catch(() => []), cachedConditional(`rows2-${season}`, 50 * 60e3, rowsFetcher(season)).catch(() => []), loadPlayers().catch(() => ({}))]);
     const g2s = await gsisToSleeper(players).catch(() => ({}));
     const teams = [...new Set(cur.flatMap((g) => [g.home, g.away]))].sort(), played = cur.filter((g) => g.hs != null && g.as != null);
     const throughWeek = played.reduce((m, g) => Math.max(m, g.week), 0), doneWeek = (() => { let w = 0; for (let k = 1; k <= 18; k++) { const wk = cur.filter((g) => g.week === k); if (wk.length && wk.every((g) => g.hs != null)) w = k; else if (wk.length) break; } return w; })();
@@ -69,7 +73,7 @@ export async function computeTeams() {
       for (const g of mine) {
         const home = g.home === t, opp = home ? g.away : g.home, exp = g.spread == null ? null : home ? g.spread : -g.spread;
         if (g.hs != null && g.as != null) { const f = home ? g.hs : g.as, a = home ? g.as : g.hs, m = f - a; m > 0 ? w++ : m < 0 ? l++ : tie++; pf += f; pa += a; log.push({ week: g.week, opp, home, neutral: g.neutral, pf: f, pa: a, margin: m, line: exp, cover: exp == null ? null : m - exp }); }
-        else ahead.push({ week: g.week, opp, home, neutral: g.neutral, line: exp, total: g.total, day: g.gameday });
+        else ahead.push({ week: g.week, opp, home, neutral: g.neutral, line: exp, total: g.total, day: g.gameday, roof: g.roof || null });
       }
       const n = log.length, V = vol[t], top = (m, k) => { const tot = Object.values(m).reduce((s, x) => s + x.n, 0); return Object.values(m).sort((a, b) => b.n - a.n || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).slice(0, k).map((x) => ({ id: x.id, name: x.name, pos: x.pos, n: x.n, share: tot ? r3(x.n / tot) : 0 })); };
       out[t] = { code: t, name: TEAM_NAME[t] || t, city: CITY[t] || "", record: [w, l, tie], games: n, pf: n ? r1(pf / n) : null, pa: n ? r1(pa / n) : null,
@@ -79,6 +83,6 @@ export async function computeTeams() {
         pace: pace[t] != null ? { v: r1(pace[t]), rank: R.pace[t] } : null, passRate: passRate[t] != null ? { v: r3(passRate[t]), rank: R.pr[t], lg: r3(lgPass) } : null,
         tshare: V ? top(V.tgt, 4) : [], cshare: V ? top(V.car, 3) : [], weekly: wk[t] || { tgt: {}, car: {} } };
     }
-    return { season, throughWeek, doneWeek, asOf: Date.now(), order: [...teams].sort((a, b) => rankNow[a] - rankNow[b]), teams: out, backtest: BACKTEST };
+    return { season, fallback: wanted ? { season, wanted } : null, throughWeek, doneWeek, asOf: Date.now(), order: [...teams].sort((a, b) => rankNow[a] - rankNow[b]), teams: out, backtest: BACKTEST };
   });
 }
