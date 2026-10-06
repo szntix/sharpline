@@ -1,7 +1,7 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
+import { setOpponent, ensureOpponent, saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -131,6 +131,7 @@ function autoRefresh() {
   if (!S.user || !S.feed || S.loading || document.hidden || dragging) return;
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
   ensureRosters(10 * 60e3);
+  ensureOpponent();
   if (Date.now() - (S.sharedAt || 0) > 2 * 3600e3 && !S._sharedBusy) { S._sharedBusy = true; S._keepScroll = true; refreshSharedQuiet().finally(() => { S._sharedBusy = false; S._keepScroll = false; }); }
   if (Date.now() - (S.feedAt || 0) < nextRefreshMs(S.feed)) return;
   S._keepScroll = true; refreshFeedQuiet().then((r) => { if (r === "advanced") toast(`Week ${S.week} is here`); }).finally(() => { S._keepScroll = false; });
@@ -220,7 +221,7 @@ $app.addEventListener("click", async (e) => {
     case "slot-add": { const E = editingLeague(); E.slots.push(document.getElementById("slot-add").value); E.rosterPreset = "custom"; commit(); break; }
     case "slot-rm": { const E = editingLeague(); E.slots.splice(Number(el.dataset.i), 1); E.rosterPreset = "custom"; commit(); break; }
     case "team-add": { const E = editingLeague(); const t = { id: Math.random().toString(36).slice(2, 10), name: `Team ${E.others.length + 2}`, roster: [] }; E.others.push(t); S.ui.openTeam = t.id; commit(); break; }
-    case "team-rm": { const E = editingLeague(); E.others = E.others.filter((o) => o.id !== id); if (E.opponent === id) E.opponent = null; commit(); break; }
+    case "team-rm": { const E = editingLeague(); E.others = E.others.filter((o) => o.id !== id); if (E.opponent === id) E.opponent = null; for (const k of Object.keys(E.opps || {})) if (E.opps[k] === id) E.opps[k] = ""; commit(); break; }
     case "rm-player": { const r = rosterFor(el.dataset.target); let gone = false; if (r) { const i = r.indexOf(id); if (i >= 0) { r.splice(i, 1); gone = true; } } commit(gone ? `Removed ${pname(id)}` : undefined); break; }
     case "pick": {
       const target = el.dataset.target;
@@ -256,7 +257,7 @@ $app.addEventListener("change", (e) => {
   if (el.dataset.change === "pl-filter") { if (["all", "free", "mine"].includes(el.value)) S.ui.plFilter = el.value; S.ui.plMore = 1; render(); return; }
   if (!b) return;
   const L = league(), E = editingLeague();
-  if (b === "opponent") { L.opponent = el.value || null; commit(); return; }
+  if (b === "opponent") { setOpponent(L, S.feed?.week ?? S.week, el.value || null); commit(); return; }
   if (b === "partner") { S.ui.partner = el.value; S.ui.get = []; render(); return; }
   if (b === "tr-give") { if (el.value) S.ui.give.push(el.value); render(); return; }
   if (b === "tr-get") { if (el.value) S.ui.get.push(el.value); render(); return; }

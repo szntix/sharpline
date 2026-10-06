@@ -1,4 +1,4 @@
-import { S, league, commit, render, pl, pname, invalidate } from "../state.js";
+import { setSleeperOpponent, S, league, commit, render, pl, pname, invalidate } from "../state.js";
 import { sleeperApi } from "../api.js";
 import { TYPE_HELP, SCORING_PRESETS, ROSTER_PRESETS, SCORING_FIELDS, SLOT_ELIG, SLOT_LABEL, LEAGUE_TYPES } from "../scoring.js";
 import { VERSION, BUILT } from "../version.js";
@@ -116,15 +116,6 @@ export async function impTeam(rid) {
   S.profile.leagues.push(L); S.profile.active = L.id; S.ui.imp = null; S.ui.editing = null;
   commit(`Imported ${lg.name}`); location.hash = "week";
 }
-export async function setSleeperOpponent(L) {
-  try {
-    const wk = S.feed?.week; if (!wk) return;
-    const ms = await sleeperApi(`league/${L.sleeper.leagueId}/matchups/${wk}`);
-    const mine = ms.find((m) => m.roster_id === L.sleeper.rosterId);
-    const opp = mine && ms.find((m) => m.matchup_id === mine.matchup_id && m.roster_id !== mine.roster_id);
-    if (opp) L.opponent = `sl${opp.roster_id}`;
-  } catch {}
-}
 // Everyone on a team: the active list plus injured reserve and the taxi squad, which Sleeper keeps in separate lists.
 const onTeam = (r) => [...new Set([...(r.players || []), ...(r.reserve || []), ...(r.taxi || [])])].filter((p) => S.players?.[p]);
 const unavailable = (L) => new Set([...L.roster, ...(L.taken || []), ...L.others.flatMap((o) => o.roster)]);
@@ -146,7 +137,8 @@ export async function syncRosters(L, { fresh = false, quiet = false } = {}) {
       else { const o = L.others.find((x) => x.id === `sl${r.roster_id}`); if (o) o.roster = ids; else L.others.push({ id: `sl${r.roster_id}`, name: `Team ${r.roster_id}`, roster: ids }); }
     }
     L.taken = [];
-    if (!quiet || L.sleeper.week !== S.feed?.week) { await setSleeperOpponent(L); L.sleeper.week = S.feed?.week; }
+    if (!quiet) await setSleeperOpponent(L, S.feed?.week);   // quiet syncs leave the opponent to ensureOpponent, which looks it up per week and retries
+    L.sleeper.week = S.feed?.week;
     const after = unavailable(L), gone = [...after].filter((id) => !before.has(id)).length, back = [...before].filter((id) => !after.has(id)).length;
     L.sleeper.syncedAt = Date.now(); delete S.ui.syncErr; S.ui.syncing = false;
     commit(quiet ? undefined : gone || back ? `Rosters synced: ${gone} now taken, ${back} available again` : "Rosters are up to date");

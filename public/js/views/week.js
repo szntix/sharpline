@@ -1,4 +1,4 @@
-import { withSource, SOURCES, S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
+import { opponentIdFor, ensureOpponent, withSource, SOURCES, S, league, computed, leagueOrDefault, pname, pl } from "../state.js";
 import { optimal, matchup, bestBallExpectation, lineupNotes, lateFlex } from "../engine.js";
 import { shortTeamName, esc, f1, f0, pct, ago, posLabel } from "../ui.js";
 import { fieldStrip } from "../charts.js";
@@ -13,7 +13,8 @@ export function viewWeek() {
   const C = computed(L || undefined); if (!C) return loading();
   if (!L) return feedError() + welcome(C);
   if (!L.roster.length) return feedError() + `<div class="panel empty"><h2 class="h2">Add your players</h2><p class="muted" style="margin:6px 0 16px">Your roster is empty in ${esc(L.name)}.</p><a class="btn primary" href="#leagues" data-act="edit-league" data-id="${L.id}">Edit roster</a></div>`;
-  const { P } = C, opp = L.others.find((o) => o.id === L.opponent), mkey = `m:${L.opponent}`;
+  const wkNow = S.feed?.week ?? S.week; ensureOpponent(L, wkNow);
+  const { P } = C, oppId = opponentIdFor(L, wkNow), opp = L.others.find((o) => o.id === oppId), mkey = `m:${oppId}`;
   const m = C.cache[mkey] || (C.cache[mkey] = matchup(C.c, L, P, L.roster, opp?.roster));
   // The lineup as shown: the optimal one (with any win-chance swap), then flex slots handed to the latest games. Totals everywhere follow this lineup.
   const shownStarters = m.best.starters.map((st) => ({ ...st, id: m.alt && st.id === m.alt.swap.out ? m.alt.swap.in : st.id }));
@@ -38,7 +39,7 @@ export function viewWeek() {
     const HURTS = new Set(["Out", "IR", "PUP", "Sus", "Doubtful", "Questionable", "NA", "COV"]), flagged = startIds.filter((id) => { const pr = P.proj[id]; return !!pr && (!!pr.noTeam || !!pr.bye || (!!pr.status && HURTS.has(pr.status))); });
     const one = flagged.length === 1 ? P.proj[flagged[0]] : null, alertTxt = flagged.length > 1 ? `${flagged.length} starters flagged` : one ? `${pname(flagged[0]).split(" ").slice(-1)[0]}: ${one.noTeam ? "No team" : one.bye ? "Bye" : one.status}` : "";
     const chips = kickTxt || alertTxt ? `<div class="wc-chips">${kickTxt ? `<span class="wchip">${esc(kickTxt)}</span>` : ""}${alertTxt ? `<button class="wchip" data-act="jump-starters"><i></i>${esc(alertTxt)}</button>` : ""}</div>` : "";
-    const oppSel = `<select data-bind="opponent" aria-label="This week's opponent"><option value="">None selected</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === L.opponent ? "selected" : ""}>vs ${esc(o.name)}</option>`).join("")}</select>`;
+    const oppSel = `<select data-bind="opponent" aria-label="This week's opponent"><option value="">None selected</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === oppId ? "selected" : ""}>vs ${esc(o.name)}</option>`).join("")}</select>`;
     hero = `<section class="turf wcard" id="wcard"><div class="wc-head"><span class="wc-wk">${title()}</span>${oppSel}</div>
       <div class="wc-row"><div class="hero-num wc-big">${pct}<small>%</small></div><div class="wc-cap">to beat<b>${esc(opp.name)}</b><em>${esc(edge)}</em></div></div>
       ${fieldStrip(w, { label: `You ${pct}%` })}
@@ -74,9 +75,11 @@ export function viewWeek() {
 
 function weekPicker(L, hasOpp) {
   if (L.type === "bestball") return "";
+  const wk = S.feed?.week ?? S.week, oppId = opponentIdFor(L, wk), last = L.others.find((o) => o.id === L.opponent && L.oppWeek != null && L.oppWeek < wk);
+  const msg = !L.others.length ? "Add other teams under Leagues to compare matchups." : oppId ? "" : L.sleeper ? (L.opps?.[wk] === "" ? "Sleeper has no matchup for you this week (a bye, or your team is out)." : "Looking up this week's opponent on Sleeper. You can also pick one below.") : last ? `Last week you played ${last.name}. Pick this week's opponent to see your chance of winning.` : "";
   return `<div style="margin-top:14px"><label class="field">This week's opponent
-    <select data-bind="opponent"><option value="">None selected</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === L.opponent ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
-    ${!L.others.length ? `<p class="small sub" style="margin-top:6px">Add other teams under Leagues to compare matchups.</p>` : ""}</div>`;
+    <select data-bind="opponent"><option value="">None selected</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === oppId ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>
+    ${msg ? `<p class="small sub" style="margin-top:6px">${esc(msg)}</p>` : ""}</div>`;
 }
 
 // Before a league exists, the app is still useful: this week's best plays at each position.

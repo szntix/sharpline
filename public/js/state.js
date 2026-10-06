@@ -19,6 +19,34 @@ export const setRender = (fn) => { render = fn; };
 
 export const league = () => S.profile?.leagues?.find((l) => l.id === S.profile.active) || S.profile?.leagues?.[0] || null;
 export const DEFAULT_LEAGUE = { id: "default", name: "Standard PPR", type: "redraft", teams: 12, scoringPreset: "ppr", scoring: { ...SCORING_PRESETS.ppr.s }, slots: [...ROSTER_PRESETS.standard.slots], bench: 6, endWeek: 17, playoffStart: 15, playoffWeight: true, roster: [], others: [], taken: [], opponent: null };
+// ---- who you play ----
+// An opponent is only good for the week it was found or picked for. A new week looks it up again (Sleeper) or asks (manual leagues); the old one is never carried over.
+export const oppWeekNow = () => S.feed?.week ?? S.week;
+export function opponentIdFor(L, week = oppWeekNow()) {
+  if (!L) return null;
+  const v = L.opps?.[week]; if (v !== undefined) return v || null;                  // "" means we know there is nobody that week (a bye, or a team that is out)
+  if (L.sleeper || !L.opponent) return null;                                         // a Sleeper league waits for Sleeper's answer rather than guess
+  if (L.oppWeek == null) L.oppWeek = week;                                           // a pick saved before weeks were tracked counts for the week it is first seen in
+  return L.oppWeek === week ? L.opponent : null;
+}
+export function setOpponent(L, week, id) { (L.opps ||= {})[week] = id || ""; if (id) { L.opponent = id; L.oppWeek = week; } }
+export async function setSleeperOpponent(L, week = oppWeekNow()) {
+  if (!L?.sleeper || !week) return false;
+  try {
+    const ms = await sleeperApi(`league/${L.sleeper.leagueId}/matchups/${week}`);
+    if (!Array.isArray(ms) || !ms.length) return false;                              // nothing published yet is not an answer
+    const mine = ms.find((m) => m.roster_id === L.sleeper.rosterId), opp = mine && mine.matchup_id != null ? ms.find((m) => m.matchup_id === mine.matchup_id && m.roster_id !== mine.roster_id) : null;
+    setOpponent(L, week, opp ? `sl${opp.roster_id}` : "");                           // no opponent is an answer too: it clears, it does not keep last week's
+    return true;
+  } catch { return false; }
+}
+// Look up who you play this week in a Sleeper league: once per week, as soon as the week is on screen, and quietly again every 15 seconds if Sleeper has not answered.
+export function ensureOpponent(L = league(), week = oppWeekNow()) {
+  if (!L?.sleeper || L.type === "bestball" || !week || L.opps?.[week] !== undefined) return;
+  const st = (S._opp ||= {}), k = `${L.id}:${week}`; if (st[k]?.busy || (st[k]?.at && Date.now() - st[k].at < 15e3)) return;
+  st[k] = { busy: true, at: Date.now() };
+  setSleeperOpponent(L, week).then((done) => { st[k] = { busy: false, at: Date.now() }; if (done) commit(); });
+}
 export const leagueOrDefault = () => league() || DEFAULT_LEAGUE;
 export const pl = (id) => S.players?.[id];
 export const pname = (id) => pl(id)?.n || id;
