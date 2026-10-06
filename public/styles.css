@@ -556,3 +556,9 @@ a.tile:focus-visible, .statrow:focus-visible { outline: 2px solid var(--link); o
 /* Defense and kicker profiles: team numbers as tiles, and the ribbon's this-week chip */
 .dp-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; } .dp-tile { border-radius: 12px; padding: 10px 12px; background: color-mix(in srgb, var(--ti) 14%, var(--paper)); color: var(--ti); display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 2px; } .dp-tile small { grid-column: 1 / -1; font-weight: 700; color: var(--ink2); font-size: 12px; } .dp-tile b { font: 800 17px/1.2 var(--font); } .dp-tile span { font-weight: 800; font-size: 13px; }
 .st-rib.now { border-style: solid; border-color: var(--ink2); }
+
+/* Streaming plans */
+.st-plan { align-items: flex-start; } .st-kind { margin: 0 0 4px; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink2); } .st-win { font-weight: 700; color: var(--ink); }
+.st-h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); }
+.st-alts { display: grid; gap: 8px; margin-bottom: 4px; } .st-alt { display: block; min-height: 44px; padding: 10px 14px; border-radius: 12px; background: var(--slate); border: 1px solid var(--hair2); color: var(--ink); text-decoration: none; } .st-alt b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); } .st-alt span { font-size: 14.5px; font-weight: 600; }
+.st-sub { margin: 4px 0 0 !important; font-size: 13.5px; color: var(--ink2); line-height: 1.4; }

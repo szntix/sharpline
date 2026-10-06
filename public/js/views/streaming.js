@@ -4,7 +4,8 @@ import { defenseStats, kickerStats, teamContext } from "../model.js";
 import { esc, f1 } from "../ui.js";
 import { prow, sec } from "./shared.js";
 import { kickerConditions } from "../conditions.js";
-import { defenseWeeks } from "./teams.js";
+import { defenseWeeks, kickerWeeks } from "./teams.js";
+import { planBoard, pickPlans, WEIGHTS } from "../plan.js";
 
 // Streaming: this week's best defenses and kickers still on waivers, using the same projection as your lineup. Both positions are mostly week-to-week luck, so the
 // honest message is a small, real edge: for defenses it is the opponent's expected score (history: the best available beat an average defense by about 2.9 points
@@ -44,32 +45,55 @@ export function oppLine(pr) {
   return `<div class="st-opp" data-opp="${esc(pr.opp)}"><b>${g && g.home === pr.team ? "vs" : "at"} ${esc(pr.opp)}</b>${kick ? ` \u00B7 ${esc(kick)}` : ""}${pr.oppImplied != null ? ` \u00B7 expected to score ${f1(pr.oppImplied)}` : ""}</div>`;
 }
 
+// The three weeks a candidate is judged on: this week, then the next two. A week is { e } (expected points), { bye: true }, or null past the end of the schedule.
+const weeksOf = (kind, id, team, wk, pr) => {
+  // This week always comes straight from the lineup's own projection, so it never depends on the team table being loaded. A game that has started or finished cannot
+  // be used this week (zero), and the later weeks come from the schedule.
+  const ahead = kind === "DEF" ? defenseWeeks(team, { from: wk + 1, to: wk + 2 }) : kickerWeeks(id, { from: wk + 1, to: wk + 2 });
+  const w0 = pr.bye ? { bye: true } : ["in", "post"].includes(pr.game?.status?.state) ? { e: 0, locked: true } : pr.mean == null ? null : { e: pr.mean };
+  return [w0, ...[1, 2].map((j) => { const x = ahead.find((it) => it.week === wk + j); return x ? (x.bye ? { bye: true } : { e: x.exp }) : null; })];
+};
+const sgn1 = (v) => (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(1);
+// "W5 +4.7, W6 +1.9, W7 bye": what each week adds over a normal streaming pickup, for as long as the plan holds him, and the bye if it ends the run.
+const windowTxt = (row, wk, upTo = row.k) => { const out = []; for (let j = 0; j < Math.min(3, Math.max(upTo, row.byeAt >= 0 ? row.byeAt + 1 : 0)); j++) { const w = row.weeks[j]; if (w == null) break; out.push(w.bye ? `W${wk + j} bye` : w.locked ? `W${wk + j} already started` : `W${wk + j} ${sgn1(row.excess[j])}`); } return out.join(", "); };
+const KIND = { now: "Most points now", run: "Best two-week run", long: "Best three-week hold" };
+
 export function viewStreaming(L) {
   if (!S.teams && !S.errors.teams) loadTeams(); loadHist();
   const C = computed(L), { P } = C, s = L.scoring, pos = positionsFor(L.slots), mine = new Set([...L.roster, ...(L.taken || [])]);
   const taken = new Set(mine); for (const o of L.others) for (const id of o.roster) taken.add(id);
   const wk = S.feed.week, manual = !L.sleeper;
-  const lede = `<p class="lede">Defenses and kickers swing from week to week more than any other position, so the edge here is small and real: the best defense on waivers is worth a few points, a kicker about one. ${manual ? "Mark players other teams already have so they drop off." : "Players rostered in your Sleeper league are left out."}</p>`;
+  const lede = `<p class="lede">Defenses and kickers swing from week to week more than any other position, so the edge here is small and real. Each suggestion is judged by what it adds over a normal streaming pickup this week and the next two, with this week counting most. A bye scores nothing, and two good weeks in a row beat three decent ones. ${manual ? "Mark players other teams already have so they drop off." : "Players rostered in your Sleeper league are left out."}</p>`;
   const all = (p) => Object.keys(S.players).filter((id) => S.players[id].p === p).map((id) => ({ id, pr: P.proj[id] })).filter(({ pr }) => pr && !pr.bye && !pr.noTeam && pr.mean != null && pr.src !== "none");
   const mineOf = (p) => { const id = L.roster.find((x) => S.players[x]?.p === p); return id ? { id, pr: P.proj[id] } : null; };
   const nick = (id) => esc((S.players[id]?.n || id).replace(/ D\/ST$| DST$/, ""));
   const chip = (t, cls = "") => `<span class="st-chip ${cls}">${esc(t)}</span>`;
-  let html = lede;
+  const board = (kind, pool, mi) => { const cands = pool.map(({ id, pr }) => ({ id, weeks: weeksOf(kind, id, pr.team, wk, pr) })), held = mi ? { id: mi.id, weeks: weeksOf(kind, mi.id, mi.pr.team, wk, mi.pr) } : null; const b = planBoard(cands, WEIGHTS[kind], { held }); return { ...b, plans: pickPlans(b) }; };
+  // tags that say what kind of move a row is
+  const tags = (r) => (r.weeks[0]?.locked ? chip("Game already started", "dn") : "") + (r.k >= 2 ? chip(`Hold ${r.k} weeks`, "up") : "") + (r.byeAt >= 0 ? chip(`Bye in W${wk + r.byeAt}`, "dn") : "");
+  const planCard = (b, mi, kind) => {
+    const { plans } = b, rec = plans.rec, r = rec.row, name = nick(r.id), noun = kind === "DEF" ? "defense" : "kicker", mineE = mi ? mi.pr.mean : null;
+    const gain = plans.top.e0 - (mineE ?? mean(pool_(kind).map((d) => d.pr.mean))), stream = rec.kind === "add", over = mi ? `your ${nick(mi.id)}` : `the average ${noun}`;
+    const verb = stream ? `Add <b>${name}</b>${r.k > 1 ? ` and keep ${kind === "DEF" ? "them" : "him"} ${r.k} weeks` : " for this week"}` : `<b>Keep your ${name}</b>${r.k > 1 ? ` for ${r.k} weeks` : " this week"}`;
+    const now = stream ? `This week alone that is ${sgn1(gain)} over ${over}.` : `The best ${noun} on waivers is ${Math.abs(gain) <= 0.3 ? `within a third of a point of ${over}` : `${Math.abs(gain).toFixed(1)} points ${gain > 0 ? "above" : "below"} ${over}`} this week.`;
+    return `<div class="panel st-sum st-plan"><div class="st-big${stream && gain > 0.3 ? " up" : ""}${stream ? "" : " hold"}" data-gain="${gain.toFixed(2)}">${stream ? sgn1(Math.max(gain, 0)).replace("\u2212", "") : "Hold"}</div><div><p class="st-kind">Recommended</p><p>${verb}.</p><p class="st-sub">Over a normal ${noun} pickup: <span class="st-win">${esc(windowTxt(r, wk))}</span>. ${now}</p></div></div>`;
+  };
+  const altCards = (b, kind) => { const a = b.plans.alts; return a.length ? `<h3 class="st-h3">Other ways to play it</h3><div class="st-alts">${a.map(({ kind: k, row: r }) => `<a class="st-alt" href="#player/${esc(r.id)}" data-go="player/${esc(r.id)}"><b>${KIND[k]}</b><span>${nick(r.id)}${r.k > 1 && k !== "now" ? ` \u00B7 hold ${r.k} weeks` : ""} \u00B7 ${esc(windowTxt(r, wk, Math.max(r.k, k === "now" ? 1 : 0)))}${k === "now" && r.byeAt >= 0 ? ` \u00B7 bye in W${wk + r.byeAt}` : ""}</span></a>`).join("")}</div>` : ""; };
+  let pool_ = (kind) => all(kind); let html = lede;
   if (pos.includes("DEF")) {
-    const defs = all("DEF"), avail = defs.filter(({ id }) => !taken.has(id)).sort((a, b) => b.pr.mean - a.pr.mean).slice(0, 5), mid = median(defs.map((d) => d.pr.mean)), mi = mineOf("DEF"), best = avail[0];
-    const row = ({ id, pr }, i, isMine) => { const ch = dstChances(HIST, pr.oppImplied, s), gain = !isMine && i === 0 && mi && pr.mean - mi.pr.mean > 0.05 ? `+${(pr.mean - mi.pr.mean).toFixed(1)}` : "";
-      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(id, C, { gain })}${oppLine(pr)}<div class="st-info">${ch ? chip(`${Math.round(ch.big * 100)}% for 10+`, "up") + chip(`${Math.round(ch.dud * 100)}% dud`, ch.dud >= 0.15 ? "dn" : "") : ""}</div>${ribbon(pr.team)}</div>`; };
-    let head = "";
-    if (best) { const g = best.pr.mean - (mi ? mi.pr.mean : mean(defs.map((d) => d.pr.mean))), who = mi ? `your ${nick(mi.id)}` : "the average defense", stream = g > 0.3;
-      const gap = Math.abs(g) <= 0.3 ? `within a third of a point of ${who}` : `${Math.abs(g).toFixed(1)} points ${g > 0 ? "above" : "below"} ${who}`;
-      head = `<div class="panel st-sum"><div class="st-big${stream ? " up" : ""}${stream ? "" : " hold"}" data-gain="${g.toFixed(2)}">${stream ? "+" + g.toFixed(1) : "Hold"}</div><p>${stream ? `<b>${nick(best.id)}</b> is projected ${gap} this week.` : `<b>You already hold one of the best matchups.</b> The best defense on waivers is ${gap}.`} Over 2021 to 2025, the best available defense typically beat an average one by about 2.9 points a week.</p></div>`; }
-    html += sec("Defenses", `${head}${mi ? `<div class="list" style="margin-bottom:12px">${row(mi, 0, true)}</div>` : ""}${avail.length ? `<div class="list">${avail.map((r, i) => row(r, i, false)).join("")}</div>` : `<p class="muted">No defense is available to add.</p>`}<p class="st-cap">A dud is 0 points or less. The chances come from five seasons of games with the same opponent expected score, re-scored with your league's settings. The dashed next-week chips are rough: lines are only posted a week ahead.</p>`, `Week ${wk}`);
+    const defs = all("DEF"), avail = defs.filter(({ id }) => !taken.has(id)), mi = mineOf("DEF"), b = avail.length ? board("DEF", avail, mi) : null, rows = b ? b.rows.slice(0, 5) : [];
+    const prOf = (id) => P.proj[id];
+    const row = (r, isMine) => { const pr = prOf(r.id), ch = dstChances(HIST, pr.oppImplied, s), gain = !isMine && b && r.id === b.plans.rec.row.id && b.plans.rec.kind === "add" && mi && r.e0 - mi.pr.mean > 0.05 ? `+${(r.e0 - mi.pr.mean).toFixed(1)}` : "";
+      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(r.id, C, { gain })}${oppLine(pr)}<div class="st-info">${ch ? chip(`${Math.round(ch.big * 100)}% for 10+`, "up") + chip(`${Math.round(ch.dud * 100)}% dud`, ch.dud >= 0.15 ? "dn" : "") : ""}${tags(r)}</div>${ribbon(pr.team)}</div>`; };
+    const mineRow = mi && b ? { ...b.heldRow } : null;
+    html += sec("Defenses", `${b ? planCard(b, mi, "DEF") : ""}${mineRow ? `<div class="list" style="margin-bottom:12px">${row(mineRow, true)}</div>` : ""}${b ? altCards(b, "DEF") : ""}${rows.length ? `<h3 class="st-h3">Best available, by the plan</h3><div class="list">${rows.map((r) => row(r, false)).join("")}</div>` : `<p class="muted">No defense is available to add.</p>`}<p class="st-cap">Ranked by what each adds over a normal pickup across this week and the next two (this week counts most; a bye counts as nothing). This week comes from the betting line; later weeks are rough because lines are only posted a week ahead, which is why they count for less. A dud is 0 points or less. Over 2021 to 2025 this ranking beat always taking the top score this week by about 0.09 points a week, giving up about 0.01 points this week to do it.</p>`, `Week ${wk}`);
   }
   if (pos.includes("K")) {
-    const ks = all("K"), avail = ks.filter(({ id }) => !taken.has(id)).sort((a, b) => b.pr.mean - a.pr.mean).slice(0, 5), mi = mineOf("K");
-    const row = ({ id, pr }, isMine) => { const c = kickerConditions(pr, s);
-      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(id, C, {})}<div class="st-info">${c ? chip(c.text, c.tone) : ""}${pr.implied != null ? chip(`team expected ${f1(pr.implied)}`) : ""}</div></div>`; };
-    html += sec("Kickers", `<div class="panel st-sum"><div class="st-big" data-gain="1">~1</div><p>Streaming a kicker is worth about a point a week, so it is not worth waiver priority. What moves a kicker is how many points his team is expected to score, whether it is favored, and the weather.</p></div>${mi ? `<div class="list" style="margin-bottom:12px">${row(mi, true)}</div>` : ""}${avail.length ? `<div class="list">${avail.map((r) => row(r, false)).join("")}</div>` : `<p class="muted">No kicker is available to add.</p>`}<p class="st-cap">Weather and roof chips show what the forecast is worth to that kicker, in your league's points, against a typical mild outdoor game.</p>`, `Week ${wk}`);
+    const ks = all("K"), avail = ks.filter(({ id }) => !taken.has(id)), mi = mineOf("K"), b = avail.length ? board("K", avail, mi) : null, rows = b ? b.rows.slice(0, 5) : [];
+    const row = (r, isMine) => { const pr = P.proj[r.id], c = kickerConditions(pr, s);
+      return `<div class="st-item${isMine ? " st-mine" : ""}">${prow(r.id, C, {})}<div class="st-info">${c ? chip(c.text, c.tone) : ""}${pr.implied != null ? chip(`team expected ${f1(pr.implied)}`) : ""}${tags(r)}</div></div>`; };
+    const rec = b?.plans.rec, kcard = b ? `<div class="panel st-sum"><div class="st-big" data-gain="1">~1</div><div><p class="st-kind">Recommended</p><p>${rec.kind === "add" ? `Add <b>${nick(rec.row.id)}</b>${rec.row.k > 1 ? ` and keep him ${rec.row.k} weeks` : " for this week"}` : `<b>Keep your ${nick(rec.row.id)}</b>`}. <span class="st-win">${esc(windowTxt(rec.row, wk))}</span> over a normal kicker pickup. Streaming a kicker is worth about a point a week, so it is not worth waiver priority: what moves a kicker is how many points his team is expected to score, whether it is favored, and the weather.</p></div></div>` : "";
+    html += sec("Kickers", `${kcard}${mi && b ? `<div class="list" style="margin-bottom:12px">${row({ ...b.heldRow }, true)}</div>` : ""}${rows.length ? `<div class="list">${rows.map((r) => row(r, false)).join("")}</div>` : `<p class="muted">No kicker is available to add.</p>`}<p class="st-cap">Ranked the same way, with lighter weight on later weeks because a kicker's future is even harder to see. Weather and roof chips show what the forecast is worth to that kicker, in your league's points, against a typical mild outdoor game.</p>`, `Week ${wk}`);
   }
   if (!pos.includes("DEF") && !pos.includes("K")) html += `<div class="panel empty"><p class="muted">Your league doesn't start a defense or a kicker, so there is nothing to stream.</p></div>`;
   return html;

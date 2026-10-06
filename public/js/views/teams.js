@@ -2,7 +2,7 @@
 // what the betting lines say. They are not a forecast: in a 3,408-game test the closing line beat every rating we could build, so win odds come from the line.
 import { S, loadTeams, league, leagueOrDefault, computed } from "../state.js";
 import { points } from "../scoring.js";
-import { defenseStats } from "../model.js";
+import { defenseStats, kickerStats } from "../model.js";
 import { lookAhead } from "../lookahead.js";
 import { kickerConditions } from "../conditions.js";
 import { esc, plate, teamStripe, sgn, emblem } from "../ui.js";
@@ -49,6 +49,19 @@ export function defenseWeeks(code, { from, to = 18 } = {}) {
     const a = t.ahead.find((g) => g.week === x.week), line = x.week === wkNow && proj[code] && !proj[code].bye && proj[code].mean != null;
     const exp = line ? proj[code].mean : rough(code, a), all = line ? nowAll() : roughAll(x.week), rank = exp == null || !all.length ? null : 1 + all.filter((v) => v > exp + 1e-9).length;
     return { ...x, home: !!(a.neutral || a.home), exp, rank, kind: line ? "now" : "rough" };
+  });
+}
+// A kicker's next weeks: this week is his projection (line, weather, injury status); later weeks are rough, from his team's scoring and the opponent's points
+// allowed, with a roof counted as a roof. A bye is a bye.
+export function kickerWeeks(id, { from, to = from + 2 } = {}) {
+  const D = S.teams?.teams ? S.teams : null, code = S.players?.[id]?.t, t = D?.teams?.[code]; if (!t || !Number.isFinite(from)) return [];
+  const s = (league() || leagueOrDefault()).scoring, wkNow = S.feed?.week ?? -1, pr = computed().P.proj[id];
+  return lookAhead(code, from - 1, D.teams, to - from + 1).map((x) => {
+    if (x.bye) return x;
+    const a = t.ahead.find((g) => g.week === x.week), home = !!(a.neutral || a.home);
+    if (x.week === wkNow && pr && !pr.bye && pr.mean != null) return { ...x, home, exp: pr.mean, kind: "now" };
+    const o = D.teams[x.opp], imp = o && o.pa && t.pf ? (t.pf + o.pa) / 2 : null;
+    return { ...x, home, exp: imp == null ? null : points(kickerStats(imp, { spread: 0, dome: a.roof === "dome" || a.roof === "closed" }), s, "K"), kind: "rough" };
   });
 }
 export function scheduleSection(code, mode = "offense") {
