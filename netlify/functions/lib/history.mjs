@@ -3,6 +3,8 @@ import { gsisToSleeper } from "./sources.mjs";
 import { loadPlayers } from "../players.mjs";
 import { MODEL } from "../../../public/js/coefs.js";
 import { abbr } from "./teams.mjs";
+import { parseDefStats } from "./defstats.mjs";
+import { parseKStats } from "./kstats.mjs";
 
 const NFLV = "https://github.com/nflverse/nflverse-data/releases/download";
 const POS = ["QB", "RB", "WR", "TE"];
@@ -35,8 +37,15 @@ function advanced(now) {
 // The fetcher cachedConditional wants: unchanged (304), not published yet (404), or the parsed rows with the file's ETag.
 export const rowsFetcher = (season) => async (etag) => {
   const r = await getTextConditional(`${NFLV}/stats_player/stats_player_week_${season}.csv`, etag, { timeout: 45000 });
-  return r.text != null ? { data: parseRows(r.text), etag: r.etag } : r;
+  return r.text != null ? { data: { rows: parseRows(r.text), def: safe(() => parseDefStats(r.text)), kick: safe(() => parseKStats(r.text)) }, etag: r.etag } : r;
 };
+// A format change in the defender or kicker columns must not take down the player model: those parts just come back empty.
+const safe = (f) => { try { return f(); } catch { return {}; } };
+// One download and one cache for the weekly file: the skill-player rows the model uses, each team's defense by game, and every kicker's kicks.
+export async function loadWeekly(season, maxAge) {
+  const d = await cachedConditional(`rows3-${season}`, maxAge, rowsFetcher(season), { empty: null });
+  return d && !Array.isArray(d) ? { rows: d.rows || [], def: d.def || {}, kick: d.kick || {} } : { rows: Array.isArray(d) ? d : [], def: {}, kick: {} };
+}
 function parseRows(text) {
   const lines = text.split("\n"); const head = splitLine(lines[0].replace(/\r$/, ""));
   const ix = Object.fromEntries(head.map((h, i) => [h, i]));
@@ -63,13 +72,14 @@ export function ewmaNext(values, mu, half = MODEL.halfLife, w0 = MODEL.priorWeig
 }
 
 export async function computeUsage() {
-  return cached("usage-v5", 60 * 60e3, async () => {
+  return cached("usage-v6", 60 * 60e3, async () => {
     const state = await nflState(); const season = Number(state.season);
-    const [prev, cur, players] = await Promise.all([
-      cachedConditional(`rows2-${season - 1}`, 30 * 864e5, rowsFetcher(season - 1)).catch(() => []),
-      cachedConditional(`rows2-${season}`, 50 * 60e3, rowsFetcher(season)),
+    const [prevW, curW, players] = await Promise.all([
+      loadWeekly(season - 1, 30 * 864e5).catch(() => ({ rows: [], def: {}, kick: {} })),
+      loadWeekly(season, 50 * 60e3),
       loadPlayers(),
     ]);
+    const prev = prevW.rows, cur = curW.rows;
     const g2s = await gsisToSleeper(players);
     const tag = (rows, s) => rows.map((r) => [s, ...r]);
     const all = [...tag(prev, season - 1), ...tag(cur, season)];
@@ -114,6 +124,9 @@ export async function computeUsage() {
       const mu = MODEL.dvpMu[pos];
       (dvp[team] ||= {})[pos] = +(ewmaNext(arr.map((x) => x.v), mu, 6, 3) / mu - 1).toFixed(3);
     }
-    return { season, throughWeek: through, asOf: Date.now(), players: out, dvp, coverage };
+    // Every kicker's season kick by kick, keyed by Sleeper id (or g:<gsis id> when it cannot be mapped; the page then matches by name and team). Last season's until this one starts.
+    const kSrc = Object.keys(curW.kick).length ? curW.kick : prevW.kick, kickers = {}; let g2 = {}; try { g2 = await gsisToSleeper(players); } catch { g2 = {}; }
+    for (const [gsis, k] of Object.entries(kSrc)) kickers[g2[gsis] || `g:${gsis}`] = k;
+    return { season, throughWeek: through, asOf: Date.now(), players: out, dvp, coverage, kickers, kickersSeason: Object.keys(curW.kick).length ? season : season - 1 };
   });
 }

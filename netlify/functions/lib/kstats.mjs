@@ -1,13 +1,8 @@
-import { getTextConditional, cachedConditional, nflState } from "./util.mjs";
 import { abbr } from "./teams.mjs";
-import { schedule } from "./schedule.mjs";
 import { checkColumns } from "./shape.mjs";
-import { gsisToSleeper } from "./sources.mjs";
-import { loadPlayers } from "../players.mjs";
 
 // Every kicker's season, kick by kick, for the kicker profile page: distances of each field goal made or missed (blocked kicks count as missed), extra points.
-// Same nflverse weekly player file as the rest of the app, kept as its own endpoint with its own cache so a slow or failed download can only affect the kicker page.
-const NFLV = "https://github.com/nflverse/nflverse-data/releases/download";
+// Parsed in the same pass as the player rows (history.mjs loadWeekly) and shipped inside the usage payload: no endpoint of its own.
 const REQUIRED = ["season_type", "position", "player_id", "player_display_name", "week", "team", "opponent_team", "fg_made_list", "fg_missed_list", "fg_blocked_list", "pat_made", "pat_att"];
 
 function splitLine(line) {
@@ -35,21 +30,4 @@ export function parseKStats(text) {
   }
   for (const k of Object.values(out)) { k.g.sort((a, b) => a[0] - b[0]); k.t = k.g[k.g.length - 1][1]; }
   return out;
-}
-const fetcher = (season) => async (etag) => {
-  const r = await getTextConditional(`${NFLV}/stats_player/stats_player_week_${season}.csv`, etag, { timeout: 45000 });
-  return r.text != null ? { data: parseKStats(r.text), etag: r.etag } : r;
-};
-export async function computeKStats() {
-  const state = await nflState(); let season = Number(state.season), fallback = null;
-  let data = await cachedConditional(`kick1-${season}`, 50 * 60e3, fetcher(season), { empty: {} });
-  if (!Object.keys(data || {}).length) {
-    const cur = await schedule(season).catch(() => []);
-    if (!cur.some((g) => g.hs != null)) { const prev = await cachedConditional(`kick1-${season - 1}`, 30 * 864e5, fetcher(season - 1), { empty: {} }); if (Object.keys(prev || {}).length) { fallback = { season: season - 1, wanted: season }; data = prev; season -= 1; } }
-  }
-  // Sleeper ids let the page find "his" rows directly. If that lookup fails the rows still go out with sid null and the page matches by name and team instead.
-  let g2s = {}; try { g2s = await gsisToSleeper(await loadPlayers()); } catch { g2s = {}; }
-  const kickers = {}; for (const [gsis, v] of Object.entries(data || {})) kickers[gsis] = { sid: g2s[gsis] || null, ...v };
-  const through = Math.max(0, ...Object.values(kickers).flatMap((k) => k.g.map((r) => r[0])));
-  return { season, throughWeek: through, asOf: Date.now(), kickers, ...(fallback ? { fallback } : {}) };
 }

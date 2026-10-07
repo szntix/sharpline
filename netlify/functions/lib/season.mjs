@@ -1,3 +1,4 @@
+import { fetchGamesText } from "./schedule.mjs";
 import { cached } from "./util.mjs";
 import { parseCsv } from "./schedule.mjs";
 
@@ -19,10 +20,8 @@ export function seasonWindow(gamedays, now = Date.now(), { before = 7, after = 3
 export async function seasonActive(now = Date.now()) {
   try {
     const days = await cached("gamedays-v1", 12 * 3600e3, async () => {
-      const r = await fetch("https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv", { signal: AbortSignal.timeout(20000) });
-      if (!r.ok) throw new Error(`nflverse schedule ${r.status}`);
       const y = new Date(now).getUTCFullYear();
-      return parseCsv(await r.text()).filter((g) => g.game_type === "REG" && Number(g.season) >= y - 1 && g.gameday).map((g) => g.gameday);
+      return parseCsv(await fetchGamesText(20000)).filter((g) => g.game_type === "REG" && Number(g.season) >= y - 1 && g.gameday).map((g) => g.gameday);
     });
     return seasonWindow(days, now);
   } catch (e) { return { active: true, nextGame: null, lastGame: null, reason: `calendar unavailable (${e.message}); running as if in season` }; }

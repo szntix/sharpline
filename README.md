@@ -146,7 +146,7 @@ Rank 1 is always best for the defense (most sacks and takeaways, fewest yards al
 
 A player who is not playing this week (bye, injured Out, no team, no line) keeps his season sections; only the sections about this week (big-game odds, how the number was built, the matchup, experts, conditions) are skipped, and a bye header names his next game.
 
-Game-by-game data comes from `/api/defstats` and `/api/kstats`, separate endpoints that read the same nflverse weekly player file and load only when such a page is opened, so a slow or failed download cannot affect the team table or the schedule. If either fails the page says so, retries by itself three times (4, 12, 30 seconds) and offers Try again. Not in the source: special-teams fumble recoveries and return yardage.
+Their game-by-game numbers come from the same nflverse weekly file the player model reads, parsed in the same pass and shipped inside the team table (defenses) and the usage data (kickers), so opening these pages makes no extra request. If the team table cannot load, the page says so, retries by itself three times and offers Try again. Not in the source: special-teams fumble recoveries and return yardage.
 
 ## Position tabs follow the league
 

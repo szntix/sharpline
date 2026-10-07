@@ -2,6 +2,8 @@
 // Ratings describe how a team has played, opponent-adjusted, blended with what the betting lines say. They are not a forecast beyond next week's line:
 // in a 3,408-game test (2010 to 2025) the closing line beat every rating built from results or lines (see BACKTEST), so win odds come from the line.
 import { cached, cachedConditional, nflState } from "./util.mjs";
+import { loadWeekly } from "./history.mjs";
+import { FIELDS as DFIELDS } from "./defstats.mjs";
 import { schedule } from "./schedule.mjs";
 import { gsisToSleeper } from "./sources.mjs";
 import { loadPlayers } from "../players.mjs";
@@ -35,13 +37,14 @@ function ranks(vals, higherBetter = true) {
 const r3 = (v) => (v == null ? null : Math.round(v * 1000) / 1000), r1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 
 export async function computeTeams() {
-  return cached("teams-v1", 15 * 60e3, async () => {
+  return cached("teams-v2", 15 * 60e3, async () => {
     const state = await nflState(); let season = Number(state.season);
     // Between the league year turning over and the new schedule being published there are no games for the new season. Until there are, keep showing last
     // season's final table (and say so) instead of an empty one; it switches by itself the moment the new schedule exists.
     let cur = await schedule(season), wanted = null;
     if (!cur.length) { const last = await schedule(season - 1).catch(() => []); if (last.length) { cur = last; wanted = season; season -= 1; } }
-    const [prev, rows, players] = await Promise.all([schedule(season - 1).catch(() => []), cachedConditional(`rows2-${season}`, 50 * 60e3, rowsFetcher(season)).catch(() => []), loadPlayers().catch(() => ({}))]);
+    const [prev, W, players] = await Promise.all([schedule(season - 1).catch(() => []), loadWeekly(season, 50 * 60e3).catch(() => ({ rows: [], def: {}, kick: {} })), loadPlayers().catch(() => ({}))]);
+    const rows = W.rows;   // the defense rows (W.def) ride in each team as dlog
     const g2s = await gsisToSleeper(players).catch(() => ({}));
     const teams = [...new Set(cur.flatMap((g) => [g.home, g.away]))].sort(), played = cur.filter((g) => g.hs != null && g.as != null);
     const throughWeek = played.reduce((m, g) => Math.max(m, g.week), 0), doneWeek = (() => { let w = 0; for (let k = 1; k <= 18; k++) { const wk = cur.filter((g) => g.week === k); if (wk.length && wk.every((g) => g.hs != null)) w = k; else if (wk.length) break; } return w; })();
@@ -79,10 +82,10 @@ export async function computeTeams() {
       out[t] = { code: t, name: TEAM_NAME[t] || t, city: CITY[t] || "", record: [w, l, tie], games: n, pf: n ? r1(pf / n) : null, pa: n ? r1(pa / n) : null,
         rating: r1(now[t].power), res: r1(now[t].res), mkt: r1(now[t].mkt), rank: rankNow[t], prevRank: rankBefore[t], trend: weeklyRatings.map((x) => r1(x[t].power)), early: n < 3, log, ahead,
         bye: Array.from({ length: 18 }, (_, i) => i + 1).filter((k) => !mine.some((g) => g.week === k)),
-        eff: { passOff: passOff[t] != null ? { v: r3(passOff[t]), rank: R.po[t] } : null, runOff: runOff[t] != null ? { v: r3(runOff[t]), rank: R.ro[t] } : null, passDef: passDef[t] != null ? { v: r3(passDef[t]), rank: R.pd[t] } : null, runDef: runDef[t] != null ? { v: r3(runDef[t]), rank: R.rd[t] } : null, defRank: R.da[t] ?? null },
+        dlog: W.def[t] || [], eff: { passOff: passOff[t] != null ? { v: r3(passOff[t]), rank: R.po[t] } : null, runOff: runOff[t] != null ? { v: r3(runOff[t]), rank: R.ro[t] } : null, passDef: passDef[t] != null ? { v: r3(passDef[t]), rank: R.pd[t] } : null, runDef: runDef[t] != null ? { v: r3(runDef[t]), rank: R.rd[t] } : null, defRank: R.da[t] ?? null },
         pace: pace[t] != null ? { v: r1(pace[t]), rank: R.pace[t] } : null, passRate: passRate[t] != null ? { v: r3(passRate[t]), rank: R.pr[t], lg: r3(lgPass) } : null,
         tshare: V ? top(V.tgt, 4) : [], cshare: V ? top(V.car, 3) : [], weekly: wk[t] || { tgt: {}, car: {} } };
     }
-    return { season, fallback: wanted ? { season, wanted } : null, throughWeek, doneWeek, asOf: Date.now(), order: [...teams].sort((a, b) => rankNow[a] - rankNow[b]), teams: out, backtest: BACKTEST };
+    return { season, fallback: wanted ? { season, wanted } : null, throughWeek, doneWeek, asOf: Date.now(), order: [...teams].sort((a, b) => rankNow[a] - rankNow[b]), teams: out, dfields: DFIELDS, backtest: BACKTEST };
   });
 }

@@ -1,13 +1,13 @@
 // The kicker profile: this week's conditions, his season by the numbers, a kick map, and how his team scores.
-// Data: /api/kstats (every kicker's season kick by kick from nflverse), loaded only when a kicker page is opened. The page says so, and retries, if it cannot load.
+// Data: every kicker's season kick by kick rides in the usage payload the app already loads (S.usage.kickers): no extra request.
 // What is shown is description, not prediction: a kicker's season is only 15 to 40 kicks, so every percentage is printed next to "made of tried" and the league's figure.
-import { S, loadTeams, loadKStats, league, leagueOrDefault } from "../state.js";
+import { S, league, leagueOrDefault } from "../state.js";
 import { points } from "../scoring.js";
 import { kickerStats, teamContext } from "../model.js";
 import { MILD } from "../conditions.js";
 import { esc } from "../ui.js";
 import { sec } from "./shared.js";
-import { rankTone, gateErr } from "./teams.js";
+import { rankTone, defenseGate } from "./teams.js";
 
 const sc = () => league()?.scoring || leagueOrDefault().scoring;
 const nn = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -18,32 +18,25 @@ const sign = (v) => (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(1);
 
 // His rows: by Sleeper id when the server could map it, otherwise by name and team.
 export function findKicker(id, p) {
-  const ks = Object.values(S.k?.kickers || {}); let k = ks.find((x) => x.sid && x.sid === id); if (k) return k;
-  const pool = ks.filter((x) => nn(x.n) === nn(p?.n)); return pool.find((x) => x.t === p?.t) || pool[0] || null;
+  const K = S.usage?.kickers || {}; if (K[id]) return K[id];
+  const pool = Object.values(K).filter((x) => nn(x.n) === nn(p?.n)); return pool.find((x) => x.t === p?.t) || pool[0] || null;
 }
 // one game (a row from the endpoint) as the stat line the league's scoring understands
 const gameStat = (r) => { const st = { fgm_0_19: 0, fgm_20_29: 0, fgm_30_39: 0, fgm_40_49: 0, fgm_50p: 0, xpm: r[5], xpmiss: Math.max(0, r[6] - r[5]), fgmiss: r[4].length }; for (const d of r[3]) st[d <= 19 ? "fgm_0_19" : d <= 29 ? "fgm_20_29" : d <= 39 ? "fgm_30_39" : d <= 49 ? "fgm_40_49" : "fgm_50p"]++; return st; };
 export const gameFp = (r, s = sc()) => points(gameStat(r), s, "K", true);
 function league_() {                                    // every kicker's totals, cached per scoring
-  const key = JSON.stringify(sc()); if (S.k._agg?.key === key) return S.k._agg;
+  const key = JSON.stringify(sc()); if (S.usage._kagg?.key === key) return S.usage._kagg;
   const bands = BANDS.map(() => [0, 0]), per = [];
-  for (const k of Object.values(S.k.kickers)) {
+  for (const k of Object.values(S.usage.kickers)) {
     let made = 0, att = 0, fp = 0, long = 0, xm = 0, xa = 0; for (const r of k.g) { for (const d of r[3]) { bands[bandOf(d)][0]++; bands[bandOf(d)][1]++; made++; att++; long = Math.max(long, d); } for (const d of r[4]) { bands[bandOf(d)][1]++; att++; } fp += gameFp(r); xm += r[5]; xa += r[6]; }
     per.push({ k, n: k.g.length, made, att, long, fpg: k.g.length ? fp / k.g.length : 0, acc: att ? made / att : null, xm, xa, apg: k.g.length ? att / k.g.length : 0 });
   }
-  return (S.k._agg = { key, bands, per, qual: per.filter((x) => x.n >= 2) });
+  return (S.usage._kagg = { key, bands, per, qual: per.filter((x) => x.n >= 2) });
 }
 const rankAmong = (A, me, f) => 1 + A.qual.filter((x) => f(x) > f(me) + 1e-9).length;
 
 // What to show while the data this page needs is missing: a loading line, or what went wrong with a button. Nothing once everything is loaded.
-export function kickerGate() {
-  if (!S.k?.kickers && !S.errors.k && !S._kBusy) loadKStats();
-  if (!S.teams?.teams && !S.errors.teams && !S._teamsBusy) loadTeams();
-  const wait = [], bad = [];
-  if (!S.teams?.teams) (S.errors.teams ? bad : wait).push("the team table and schedule");
-  if (!S.k?.kickers) (S.errors.k ? bad : wait).push("his kick-by-kick stats");
-  return (wait.length ? `<div class="panel dp-wait" role="status"><span class="spinner"></span> Loading ${wait.join(" and ")}\u2026</div>` : "") + (!S.teams?.teams && S.errors.teams ? gateErr("the team table and schedule", "teams") : "") + (!S.k?.kickers && S.errors.k ? gateErr("his kick-by-kick stats", "k") : "");
-}
+export function kickerGate() { return defenseGate(); }   // same team-table gate as every profile; his kicks come with the usage payload
 
 // ---------------- this week: conditions
 export function kickerConditionsSec(id, p, pr) {
@@ -61,7 +54,7 @@ export function kickerConditionsSec(id, p, pr) {
 
 // ---------------- season so far: by the numbers
 export function kickerNumbers(id, p) {
-  if (!S.k?.kickers) return ""; const me = findKicker(id, p); if (!me) return "";
+  if (!S.usage?.kickers) return ""; const me = findKicker(id, p); if (!me) return "";
   const A = league_(), m = A.per.find((x) => x.k === me); if (!m || !m.n) return "";
   const tile = (label, val, rank) => `<div class="dp-tile tone-${rank ? rankTone(rank) : "n"}"><small>${label}</small><b>${val}</b>${rank ? `<span>#${rank}</span>` : ""}</div>`, N = A.qual.length;
   const q = m.n >= 2, tiles = [tile("Fantasy points", `${m.fpg.toFixed(1)} a game`, q ? rankAmong(A, m, (x) => x.fpg) : null), tile("Kicks tried", `${m.apg.toFixed(1)} a game`, q ? rankAmong(A, m, (x) => x.apg) : null),
@@ -71,7 +64,7 @@ export function kickerNumbers(id, p) {
 
 // ---------------- season so far: the kick map
 export function kickMap(id, p) {
-  if (!S.k?.kickers) return ""; const me = findKicker(id, p);
+  if (!S.usage?.kickers) return ""; const me = findKicker(id, p);
   if (!me) return sec("Kick map", `<div class="panel"><p class="m">No kicks recorded for him yet this season.</p></div>`);
   const A = league_(), games = [...me.g].reverse(), sel = S.ui.kickBand ?? null, bs = BANDS.map(([nm, lo, hi], i) => { let made = 0, att = 0; for (const r of me.g) { for (const d of r[3]) if (bandOf(d) === i) { made++; att++; } for (const d of r[4]) if (bandOf(d) === i) att++; } return { nm, lo, hi, made, att, p: att ? made / att : null, lg: A.bands[i][1] ? A.bands[i][0] / A.bands[i][1] : null }; });
   const tone = (b) => (b.p == null || b.lg == null ? "n" : b.p - b.lg >= 0.05 ? "g2" : b.p - b.lg <= -0.2 ? "b2" : b.p - b.lg <= -0.1 ? "b1" : "n");
@@ -94,7 +87,7 @@ export function kickMap(id, p) {
 
 // ---------------- the team parallel: how his team scores
 export function kickerTeamMix(id, p) {
-  if (!S.k?.kickers || !S.teams?.teams) return ""; const me = findKicker(id, p); if (!me) return "";
+  if (!S.usage?.kickers || !S.teams?.teams) return ""; const me = findKicker(id, p); if (!me) return "";
   const rows = me.g.map((r) => { const lg = S.teams.teams[r[1]]?.log?.find((g) => g.week === r[0]); return lg ? { w: r[0], pf: lg.pf, fg: 3 * r[3].length, xp: r[5], att: r[3].length + r[4].length } : null; }).filter(Boolean);
   if (!rows.length) return "";
   const max = Math.max(...rows.map((x) => x.pf), 1), PH = 110, hh = (v) => Math.round((v / max) * PH), kick = rows.reduce((a, x) => a + x.fg + x.xp, 0), all = rows.reduce((a, x) => a + x.pf, 0), att = rows.reduce((a, x) => a + x.att, 0);

@@ -1,9 +1,3 @@
-import { json, fail } from "./lib/util.mjs";
-import { computeDefStats } from "./lib/defstats.mjs";
-
-// Each team's defense game by game (sacks, QB hits, takeaways, tackles for loss, passes defended, defensive TDs, safeties, blocks,
-// and the yards the other team gained). Loaded only when a defense or kicker profile is opened.
-export default async () => {
-  try { return json(await computeDefStats(), 200, { "cache-control": "public, max-age=300", "netlify-cdn-cache-control": "public, durable, max-age=900, stale-while-revalidate=1800" }); }
-  catch (e) { return fail(`Defense stats unavailable: ${e.message}`, 502); }
-};
+// Placeholder (tombstone). This endpoint was removed in 3.25.0: the data now rides in /api/teams. The file stays only because unzipping an
+// update cannot delete old files, and a stale copy importing code that no longer exists would break the deploy. It imports nothing; the app never calls it.
+export default async () => new Response(JSON.stringify({ error: "Removed in 3.25.0. The data is in /api/teams." }), { status: 410, headers: { "content-type": "application/json" } });

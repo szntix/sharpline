@@ -1,6 +1,6 @@
 // Teams: the power rankings (a second view inside Slate) and one page per team. Ratings describe how a team has played, opponent-adjusted and blended with
 // what the betting lines say. They are not a forecast: in a 3,408-game test the closing line beat every rating we could build, so win odds come from the line.
-import { S, loadTeams, loadDefStats, league, leagueOrDefault, computed } from "../state.js";
+import { S, loadTeams, league, leagueOrDefault, computed } from "../state.js";
 import { points } from "../scoring.js";
 import { defenseStats, kickerStats, teamContext } from "../model.js";
 import { lookAhead } from "../lookahead.js";
@@ -93,12 +93,14 @@ export function defenseHow(code) {
 // ---------- the defense profile, enriched: its numbers, who scores against it, and a game log ----------
 // Source: /api/defstats (nflverse weekly stats, defenders plus the yards the other offense gained). Loaded only when a defense or kicker page needs it.
 // If either source is missing the page says so (and retries by itself) instead of quietly leaving sections out.
+// Each team's defense game by game rides in the team table (the server parses it from the weekly file it already reads): no extra request.
+export function defData() { const T = S.teams; if (!T?.dfields || !T.teams) return null; if (T._dd) return T._dd; const teams = {}; for (const [c, t] of Object.entries(T.teams)) if (t.dlog?.length) teams[c] = t.dlog; return (T._dd = { fields: T.dfields, teams, fallback: T.fallback || null }); }
 const DEF_TIER = [[0, "pts_allow_0"], [6, "pts_allow_1_6"], [13, "pts_allow_7_13"], [20, "pts_allow_14_20"], [27, "pts_allow_21_27"], [34, "pts_allow_28_34"], [Infinity, "pts_allow_35p"]];
 const defScoring = () => league()?.scoring || leagueOrDefault().scoring;
 // one defense's games, with points allowed and home or away taken from the team table when it has that week
 export function defenseGameRows(code) {
-  const D = S.def?.teams?.[code]; if (!D) return null;
-  const F = S.def.fields, byWeek = new Map((S.teams?.teams?.[code]?.log || []).map((g) => [g.week, g]));
+  const D = defData()?.teams?.[code]; if (!D) return null;
+  const F = defData().fields, byWeek = new Map((S.teams?.teams?.[code]?.log || []).map((g) => [g.week, g]));
   return D.map((r) => { const o = { week: r[0], opp: r[1] }; F.forEach((k, i) => (o[k] = r[i + 2])); const g = byWeek.get(r[0]); o.pa = g ? g.pa : null; o.home = g ? g.home : null; return o; });
 }
 // fantasy points for one game under a league's scoring (needs points allowed to know the tier)
@@ -108,34 +110,31 @@ export function defenseGamePoints(g, sc) {
   return points({ sack: g.sk, int: g.int, fum_rec: g.fr, def_td: g.td, def_st_td: g.stt, safe: g.saf, blk_kick: g.blk, [tier]: 1 }, sc, "DEF", true);
 }
 function leagueDef() {
-  if (S.def._avg) return S.def._avg;
-  const F = S.def.fields, A = {};
-  for (const [code, rows] of Object.entries(S.def.teams)) {
+  if (defData()._avg) return defData()._avg;
+  const F = defData().fields, A = {};
+  for (const [code, rows] of Object.entries(defData().teams)) {
     if (!rows.length) continue; const tot = Object.fromEntries(F.map((k, i) => [k, rows.reduce((a, r) => a + r[i + 2], 0)])), n = rows.length;
     A[code] = { n, tot, ...Object.fromEntries(Object.entries(tot).map(([k, v]) => [k + "G", v / n])) };
   }
-  return (S.def._avg = A);
+  return (defData()._avg = A);
 }
 const rankOf = (A, code, f, low = false) => 1 + Object.values(A).filter((x) => (low ? f(x) < f(A[code]) - 1e-9 : f(x) > f(A[code]) + 1e-9)).length;
 function defenseFp(code, sc) {                       // average per game, last three, and the rank of each among all defenses
   const key = JSON.stringify(Object.fromEntries(Object.entries(sc).filter(([k]) => /^(sack|int|fum_rec|def_td|def_st_td|safe|blk_kick|pts_allow)/.test(k))));
-  if (S.def._fp?.key !== key) {
-    const m = {}; for (const c of Object.keys(S.def.teams)) { const v = (defenseGameRows(c) || []).map((g) => defenseGamePoints(g, sc)).filter((x) => x != null); if (v.length) m[c] = { avg: v.reduce((a, b) => a + b, 0) / v.length, l3: v.slice(-3).reduce((a, b) => a + b, 0) / Math.min(3, v.length), n: v.length }; }
-    S.def._fp = { key, m };
+  if (defData()._fp?.key !== key) {
+    const m = {}; for (const c of Object.keys(defData().teams)) { const v = (defenseGameRows(c) || []).map((g) => defenseGamePoints(g, sc)).filter((x) => x != null); if (v.length) m[c] = { avg: v.reduce((a, b) => a + b, 0) / v.length, l3: v.slice(-3).reduce((a, b) => a + b, 0) / Math.min(3, v.length), n: v.length }; }
+    defData()._fp = { key, m };
   }
-  const m = S.def._fp.m, me = m[code]; if (!me) return null;
+  const m = defData()._fp.m, me = m[code]; if (!me) return null;
   return { ...me, rAvg: 1 + Object.values(m).filter((x) => x.avg > me.avg + 1e-9).length, rL3: 1 + Object.values(m).filter((x) => x.l3 > me.l3 + 1e-9).length };
 }
 const fpTone = (v) => (v >= 12 ? "g2" : v >= 8 ? "g1" : v >= 4 ? "n" : v >= 1 ? "b1" : "b2");
-export const gateErr = (what, k) => `<div class="panel empty dp-gate" role="alert"><b>Couldn't load ${what}</b><p class="m">${esc(S.errors[k] || "")}. ${(S[`_${k}Try`] || 0) < 3 ? "Trying again automatically." : "Tap to try again."}</p><button class="btn" data-act="${{ teams: "teams-retry", def: "def-retry", k: "k-retry" }[k]}">Try again</button></div>`;
+export const gateErr = (what, k) => `<div class="panel empty dp-gate" role="alert"><b>Couldn't load ${what}</b><p class="m">${esc(S.errors[k] || "")}. ${(S[`_${k}Try`] || 0) < 3 ? "Trying again automatically." : "Tap to try again."}</p><button class="btn" data-act="teams-retry">Try again</button></div>`;
 // What to show while the data this page needs is missing: a loading line, or what went wrong with a button. Nothing when all is loaded.
 export function defenseGate() {
-  if (!S.def?.teams && !S.errors.def && !S._defBusy) loadDefStats();
   if (!S.teams?.teams && !S.errors.teams && !S._teamsBusy) loadTeams();
-  const wait = [], bad = [];
-  if (!S.teams?.teams) (S.errors.teams ? bad : wait).push("the team table and schedule");
-  if (!S.def?.teams) (S.errors.def ? bad : wait).push("this defense's game-by-game stats");
-  return (wait.length ? `<div class="panel dp-wait" role="status"><span class="spinner"></span> Loading ${wait.join(" and ")}\u2026</div>` : "") + (!S.teams?.teams && S.errors.teams ? gateErr("the team table and schedule", "teams") : "") + (!S.def?.teams && S.errors.def ? gateErr("this defense's game-by-game stats", "def") : "");
+  if (S.teams?.teams) return "";
+  return S.errors.teams ? gateErr("the team table and schedule", "teams") : `<div class="panel dp-wait" role="status"><span class="spinner"></span> Loading the team table and schedule\u2026</div>`;
 }
 // For every other profile page: only speak up when the team data failed to load.
 export const teamsErrorGate = () => (!S.teams?.teams && S.errors.teams ? gateErr("the team table and schedule", "teams") : "");
@@ -144,7 +143,7 @@ export const teamsErrorGate = () => (!S.teams?.teams && S.errors.teams ? gateErr
 // It describes the matchup; it does not predict it: in 2021-2025 tests, opponent sack and giveaway rates added nothing beyond the betting line.
 const verdict = (o, w) => { const a = (o + w) / 2; return a <= 17 ? [a <= 12 ? "g2" : "g1", "Our edge"] : a <= 23 ? ["n", "Even"] : ["b1", "Their edge"]; };
 export function defenseMatchup(code, pr) {
-  const D = S.teams?.teams, A = S.def?.teams ? leagueDef() : null, t = D?.[code]; if (!t || !A?.[code]) return "";
+  const D = S.teams?.teams, A = defData()?.teams ? leagueDef() : null, t = D?.[code]; if (!t || !A?.[code]) return "";
   const g = pr?.game, c = g ? teamContext(g, code) : null, opp = c?.opp || null;
   if (!opp) return t.bye?.includes(S.feed?.week) ? sec("The matchup", `<div class="panel"><p class="m">Bye week. No opponent this week.</p></div>`, "this week") : "";
   const O = A[opp], T2 = D[opp]; if (!O || !T2 || !T2.games) return "";
@@ -160,7 +159,7 @@ export function defenseMatchup(code, pr) {
 
 // D2: where this defense stands. Eight categories on one rank track, strongest first; tap a row for its game-by-game numbers.
 export function defenseStands(code) {
-  const A = S.def?.teams ? leagueDef() : null, a = A?.[code], D = S.teams?.teams, t = D?.[code]; if (!a || !t) return "";
+  const A = defData()?.teams ? leagueDef() : null, a = A?.[code], D = S.teams?.teams, t = D?.[code]; if (!a || !t) return "";
   const live = Object.values(D).filter((v) => v.games), fp = defenseFp(code, defScoring()), games = defenseGameRows(code) || [], rk = (f, low) => rankOf(A, code, f, low), val = (n) => (n >= 100 ? String(Math.round(n)) : n.toFixed(1));
   const cats = [{ k: "Sacks", v: a.skG, r: rk((x) => x.skG), f: (g) => g.sk }, { k: "QB hits", v: a.hitG, r: rk((x) => x.hitG), f: (g) => g.hit }, { k: "Takeaways", v: a.intG + a.frG, r: rk((x) => x.intG + x.frG), f: (g) => g.int + g.fr },
     { k: "Tackles for loss", v: a.tflG, r: rk((x) => x.tflG), f: (g) => g.tfl }, { k: "Passes defended", v: a.pdG, r: rk((x) => x.pdG), f: (g) => g.pd }, { k: "Pass yards allowed", v: a.pyG, r: rk((x) => x.pyG, true), f: (g) => g.py },
@@ -169,7 +168,7 @@ export function defenseStands(code) {
   const row = (c) => `<button type="button" class="pf-lrow tone-${rankTone(c.r)}" data-act="def-stand" data-v="${esc(c.k)}" aria-expanded="${open === c.k}"><span class="nm">${c.k}<small>${val(c.v)} a game</small></span><span class="pf-track"><i class="pf-dot" style="left:${((c.r - 1) / 31) * 100}%"></i></span><span class="rk">#${c.r}</span></button>${open === c.k ? `<div class="pf-exp" role="region" aria-label="${c.k} by game">${games.map((g) => `<span>W${g.week} <b>${one(c.f(g))}</b></span>`).join("")}</div>` : ""}`;
   const tile = (label, v, rank) => `<div class="dp-tile tone-${rankTone(rank)}"><small>${label}</small><b>${v}</b><span>#${rank}</span></div>`;
   const tiles = fp ? `<div class="dp-tiles" style="margin-bottom:12px">${tile("Fantasy points", `${fp.avg.toFixed(1)} a game`, fp.rAvg)}${tile("Fantasy, last 3", `${fp.l3.toFixed(1)} a game`, fp.rL3)}</div>` : "";
-  const note = S.def.fallback ? `<p class="tm-cap">Last season's final numbers, until this season's games are played.</p>` : "";
+  const note = defData().fallback ? `<p class="tm-cap">Last season's final numbers, until this season's games are played.</p>` : "";
   return sec("Where this defense stands", `<div class="panel">${tiles}<div class="pf-axis"><span>best</span><span>worst</span></div>${cats.map(row).join("")}<p class="tm-cap">Per game over ${a.n} game${a.n === 1 ? "" : "s"}, from nflverse, ranked of 32. All eight on one track, strongest first, so you see what this defense is built on and where it leaks. Tap a row for the game-by-game numbers. Fantasy points use your league's scoring; ${Math.round(a.tot.td + a.tot.stt)} defensive or special-teams touchdown${Math.round(a.tot.td + a.tot.stt) === 1 ? "" : "s"} so far.</p>${note}</div>`, "rank of 32");
 }
 
@@ -188,9 +187,9 @@ export function defenseVsPositions(code) {
 
 // D3: recent games. The last five games as bars (five fit at 44px or more even on a 320px screen) (green = above the league average) linked to the log below: tap a bar or a row to select that game.
 export function defenseRecent(code) {
-  const g0 = S.def?.teams ? defenseGameRows(code) : null; if (!g0 || !g0.length) return "";
+  const g0 = defData()?.teams ? defenseGameRows(code) : null; if (!g0 || !g0.length) return "";
   const sc = defScoring(), all = g0.map((x) => ({ ...x, fp: defenseGamePoints(x, sc) })), fpAll = defenseFp(code, sc), shown = all.slice(-5), older = all.slice(0, -5).reverse();
-  const mv = S.def._fp?.m ? Object.values(S.def._fp.m) : [], lgAvg = mv.length ? mv.reduce((a, b) => a + b.avg, 0) / mv.length : 5, A = leagueDef()[code];
+  const mv = defData()._fp?.m ? Object.values(defData()._fp.m) : [], lgAvg = mv.length ? mv.reduce((a, b) => a + b.avg, 0) / mv.length : 5, A = leagueDef()[code];
   const sel = S.ui.defWeek != null && shown.some((x) => x.week === S.ui.defWeek) ? S.ui.defWeek : ([...shown].reverse().find((x) => x.fp != null) || shown[shown.length - 1]).week, cur = shown.find((x) => x.week === sel);
   const vals = shown.map((x) => x.fp ?? 0), mn = Math.min(0, ...vals), mx = Math.max(1, ...vals, lgAvg + 1), span = mx - mn, PH = 120, y = (v) => ((v - mn) / span) * PH;
   const col = (x) => { const v = x.fp; const b = v == null ? 0 : Math.min(y(0), y(v)), h = v == null ? 0 : Math.max(Math.abs(y(v) - y(0)), 2), hi = v != null && v >= lgAvg;

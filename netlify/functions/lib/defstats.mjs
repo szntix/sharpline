@@ -1,13 +1,10 @@
-import { getTextConditional, cachedConditional, nflState } from "./util.mjs";
 import { abbr } from "./teams.mjs";
-import { schedule } from "./schedule.mjs";
 import { checkColumns } from "./shape.mjs";
 
 // Team defense by game, for the defense and kicker profile pages.
 // Reads the same nflverse weekly player file the rest of the app uses, but keeps the DEFENDERS (which the player model ignores)
 // and adds each team's defensive counting stats up per game. Yards allowed come from the opponent's offensive rows.
-// It is its own endpoint with its own cache on purpose: a slow or failed download here can never take down the team table or schedule.
-const NFLV = "https://github.com/nflverse/nflverse-data/releases/download";
+// Parsed in the same pass as the player rows (history.mjs loadWeekly) and shipped inside the team table: no endpoint of its own.
 // Order of the numbers in each game row. The client reads them by this order.
 export const FIELDS = ["sk", "hit", "int", "fr", "ff", "tfl", "pd", "td", "saf", "blk", "stt", "py", "ry", "sks", "gv"];
 const DEF_COLS = ["def_sacks", "def_qb_hits", "def_interceptions", "fumble_recovery_opp", "def_fumbles_forced", "def_tackles_for_loss", "def_pass_defended", "def_tds", "def_safeties"];
@@ -45,21 +42,4 @@ export function parseDefStats(text) {
   for (const r of Object.values(acc)) (out[r.tm] ||= []).push([r.wk, r.op, ...r.v.map((x) => Math.round(x * 10) / 10)]);
   for (const t of Object.keys(out)) out[t].sort((a, b) => a[0] - b[0]);
   return out;
-}
-
-const fetcher = (season) => async (etag) => {
-  const r = await getTextConditional(`${NFLV}/stats_player/stats_player_week_${season}.csv`, etag, { timeout: 45000 });
-  return r.text != null ? { data: parseDefStats(r.text), etag: r.etag } : r;
-};
-
-// The season to show: the current one, or last season's while the new schedule is not out and no game has been played.
-export async function computeDefStats() {
-  const state = await nflState(); let season = Number(state.season), fallback = null;
-  let data = await cachedConditional(`def3-${season}`, 50 * 60e3, fetcher(season), { empty: {} });
-  if (!Object.keys(data || {}).length) {
-    const cur = await schedule(season).catch(() => []);
-    if (!cur.some((g) => g.hs != null)) { const prev = await cachedConditional(`def3-${season - 1}`, 30 * 864e5, fetcher(season - 1), { empty: {} }); if (Object.keys(prev || {}).length) { fallback = { season: season - 1, wanted: season }; data = prev; season -= 1; } }
-  }
-  const teams = data || {}, through = Math.max(0, ...Object.values(teams).flatMap((g) => g.map((r) => r[0])));
-  return { season, throughWeek: through, asOf: Date.now(), fields: FIELDS, teams, ...(fallback ? { fallback } : {}) };
 }

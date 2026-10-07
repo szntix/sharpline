@@ -1,7 +1,7 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { setOpponent, ensureOpponent, saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, loadDefStats, loadKStats, pl, pname } from "./state.js";
+import { setOpponent, ensureOpponent, saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -206,8 +206,6 @@ $app.addEventListener("click", async (e) => {
     case "jump-starters": document.getElementById("starters")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); break;
     case "slate-view": S.ui.slateView = v; render(); break;
     case "teams-retry": delete S.errors.teams; S._teamsTry = 0; loadTeams(true); break;
-    case "def-retry": delete S.errors.def; S._defTry = 0; loadDefStats(true); break;
-    case "k-retry": delete S.errors.k; S._kTry = 0; loadKStats(true); break;
     case "kick-band": S.ui.kickBand = S.ui.kickBand === +v ? null : +v; render(); break;
     case "def-week": S.ui.defWeek = S.ui.defWeek === +v ? null : +v; render(); break;
     case "def-stand": S.ui.defStand = S.ui.defStand === v ? null : v; render(); break;
