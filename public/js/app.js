@@ -1,7 +1,7 @@
 import { srcStrip } from "./views/shared.js";
 import { api, session, localProfile } from "./api.js";
 import { SCORING_PRESETS, ROSTER_PRESETS } from "./scoring.js";
-import { setOpponent, ensureOpponent, saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, pl, pname } from "./state.js";
+import { setOpponent, ensureOpponent, saveFolds, refreshSharedQuiet, SOURCES, S, setRender, league, commit, invalidate, loadData, loadFeed, refreshFeedQuiet, loadTeams, loadDefStats, loadKStats, pl, pname } from "./state.js";
 import { nextRefreshMs } from "./refresh.js";
 import { esc, toast } from "./ui.js";
 import { capHtml } from "./charts.js";
@@ -123,6 +123,8 @@ async function boot() {
   render();
   api("profile").then((r) => { if (r.profile) { S.profile = r.profile; invalidate(); render(); } }).catch((e) => { if (e.status === 401) { session.set(null); renderAuth("Your session expired. Sign in again."); } });
   loadData();
+  // The team table is small (about 13 KB) and every profile page uses it, so fetch it quietly a moment after start instead of waiting for the first profile to ask.
+  setTimeout(() => { if (S.user && !S.teams && !S.errors.teams) loadTeams(); }, 2500);
 }
 
 // ---------------------------------------------------------------- auto-refresh
@@ -203,7 +205,12 @@ $app.addEventListener("click", async (e) => {
     case "to-top": window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); break;
     case "jump-starters": document.getElementById("starters")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); break;
     case "slate-view": S.ui.slateView = v; render(); break;
-    case "teams-retry": delete S.errors.teams; loadTeams(true); break;
+    case "teams-retry": delete S.errors.teams; S._teamsTry = 0; loadTeams(true); break;
+    case "def-retry": delete S.errors.def; S._defTry = 0; loadDefStats(true); break;
+    case "k-retry": delete S.errors.k; S._kTry = 0; loadKStats(true); break;
+    case "kick-band": S.ui.kickBand = S.ui.kickBand === +v ? null : +v; render(); break;
+    case "def-week": S.ui.defWeek = S.ui.defWeek === +v ? null : +v; render(); break;
+    case "def-stand": S.ui.defStand = S.ui.defStand === v ? null : v; render(); break;
     case "moves-tab": if (v === "trades" && S.ui.moves !== "trades") { S.ui.partner = ""; S.ui.give = []; S.ui.get = []; } S.ui.moves = v; render(); break;
     case "st-filter": S.ui.plFilter = v; render(); break;
     case "proof-pos": S.ui.proofPos = v; render(); break;

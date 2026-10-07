@@ -140,10 +140,24 @@ export async function refreshSharedQuiet() {
 }
 
 // The team figures load the first time a team screen opens, not at startup.
+// A failed or slow first request used to leave every profile page without its team sections until someone visited Teams and tapped Retry.
+// Now a failure tries again by itself (4 s, 12 s, then 30 s later), then stops, and the page says what is happening in the meantime.
+const retryMs = () => (typeof window !== "undefined" && window.__retryMs) || [4000, 12000, 30000];
+function scheduleRetry(kind) {
+  const n = S[`_${kind}Try`] || 0, wait = retryMs()[n]; if (wait == null) return; S[`_${kind}Try`] = n + 1;
+  const have = { teams: () => S.teams, def: () => S.def, k: () => S.k }, load = { teams: loadTeams, def: loadDefStats, k: loadKStats };
+  setTimeout(() => { if (have[kind]()) return; delete S.errors[kind]; invalidate(); render(); load[kind](true); }, wait);
+}
 export async function loadTeams(force = false) {
   if (S._teamsBusy || (S.teams && !force)) return; S._teamsBusy = true;
-  try { const v = await api("teams", { auth: false }); if (!v?.teams || !Array.isArray(v.order)) throw new Error("Team data came back in an unexpected form"); S.teams = v; delete S.errors.teams; } catch (e) { S.errors.teams = e.message; }
+  try { const v = await api("teams", { auth: false }); if (!v?.teams || !Array.isArray(v.order)) throw new Error("Team data came back in an unexpected form"); S.teams = v; delete S.errors.teams; S._teamsTry = 0; } catch (e) { S.errors.teams = e.message; scheduleRetry("teams"); }
   S._teamsBusy = false; invalidate(); render();
+}
+// Each team's defense game by game (sacks, takeaways, yards allowed ...), loaded only when a defense or kicker profile is opened.
+export async function loadDefStats(force = false) {
+  if (S._defBusy || (S.def && !force)) return; S._defBusy = true;
+  try { const v = await api("defstats", { auth: false }); if (!v?.teams || !Array.isArray(v.fields)) throw new Error("Defense stats came back in an unexpected form"); S.def = v; delete S.errors.def; S._defTry = 0; } catch (e) { S.errors.def = e.message; scheduleRetry("def"); }
+  S._defBusy = false; invalidate(); render();
 }
 
 // Save the profile (debounced by api.js) and redraw.
@@ -151,4 +165,11 @@ export function commit(msg) {
   invalidate(); S.saveState = "saving";
   saveProfile(S.user, S.profile, (err) => { S.saveState = err ? "error" : "saved"; if (err) toast(`Not saved: ${err.message}`); const d = document.getElementById("savedot"); if (d) d.textContent = S.saveState === "saving" ? "Saving…" : S.saveState === "error" ? "Not saved" : "Saved"; });
   render(); if (msg) toast(msg);
+}
+
+// Every kicker's season kick by kick (distances made and missed, extra points), loaded only when a kicker profile is opened.
+export async function loadKStats(force = false) {
+  if (S._kBusy || (S.k && !force)) return; S._kBusy = true;
+  try { const v = await api("kstats", { auth: false }); if (!v?.kickers || typeof v.kickers !== "object") throw new Error("Kicker stats came back in an unexpected form"); S.k = v; delete S.errors.k; S._kTry = 0; } catch (e) { S.errors.k = e.message; scheduleRetry("k"); }
+  S._kBusy = false; invalidate(); render();
 }

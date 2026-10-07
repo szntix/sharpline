@@ -1,4 +1,5 @@
-import { teamStrip, playerTeamSections, defenseHow, kickerHow, scheduleSection } from "./teams.js";
+import { teamStrip, playerTeamSections, defenseHow, defenseMatchup, defenseStands, defenseVsPositions, defenseRecent, defenseGate, teamsErrorGate, kickerHow, scheduleSection } from "./teams.js";
+import { kickerGate, kickerConditionsSec, kickerNumbers, kickMap, kickerTeamMix } from "./kicker.js";
 import { ADV, ADV_BY_POS, peerList, gradeOf, rankLabel, whyNot, whyShort } from "./advstats.js";
 import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
@@ -28,6 +29,8 @@ function defensePct(opp, pos) {
   const v = S.usage?.dvp?.[opp]?.[pos]; return v == null ? null : { v, p: percentile(vals, v), n: vals.length };
 }
 
+// his team's next game, for the header when he is not playing this week
+const nextGame = (t) => { const a = S.teams?.teams?.[t]?.ahead?.[0]; return a ? ` Next game: week ${a.week} ${a.home ? "vs" : "at"} ${esc(a.opp)}.` : ""; };
 export function viewPlayer(id) {
   if (!S.players || !S.feed) return feedError() + loading("this player");
   const p = pl(id);
@@ -36,7 +39,7 @@ export function viewPlayer(id) {
   const g = pr?.game, ours = C.ranks.ours[id], exp = C.ranks.exp[id];
   const out = pr && !(pr.mean > 0);
   const head = out
-    ? `<div class="hero-num" style="font-size:60px">${pr.bye ? "Bye" : pr.noTeam ? "No team" : pr.status || "No line"}</div><p style="margin-top:6px">${pr.bye ? "Not playing this week." : pr.noTeam ? "Not on a team right now, so he is not projected until he signs." : pr.status ? esc(statusText(pr)) : "No projection yet."}</p>`
+    ? `<div class="hero-num" style="font-size:60px">${pr.bye ? "Bye" : pr.noTeam ? "No team" : pr.status || "No line"}</div><p style="margin-top:6px">${pr.bye ? `Not playing this week.${nextGame(p.t)}` : pr.noTeam ? "Not on a team right now, so he is not projected until he signs." : pr.status ? esc(statusText(pr)) : "No projection yet."}</p>`
     : `<div class="pj"><div class="hero-num">${f1(pr.mean)}</div><div class="rng">projected points<br>in ${L ? "your" : "standard PPR"} scoring${pr.status ? `<br>${esc(statusText(pr))}` : ""}</div></div>`;
   const ctxBits = [`${posLabel(pos)}, ${esc(p.t || "free agent")}${AGE(p)}`];
   if (g && pos !== "DEF") ctxBits.push(`${g.home === p.t ? "vs" : "at"} ${esc(pr.opp)}, ${esc(kickoffText(g))}`);
@@ -48,11 +51,12 @@ export function viewPlayer(id) {
       <div class="ctx">${ctxBits.map((b) => `<span>${b}</span>`).join("")}</div>${head}
       ${chips.length ? `<div class="chipline">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
       <div class="toolbar"><a class="btn primary" href="#compare/${id}">Compare with…</a>${L && !L.roster.includes(id) ? `<button class="btn" data-act="add-mine" data-id="${id}">Add to my team</button>` : ""}</div></section>`;
-  if (out) return feedError() + hero + teamStrip(p.t) + notesSection(id, C);
+  // No projection this week (a bye, injured Out, no team, no line): skip only the sections about THIS week. His season (usage, recent games, role, next weeks) still stands.
+  const live = !out;
 
   // 1. How likely is a big game
-  const thr = S.ui.thr[id] ?? defaultThr(pr, pos), opts = thrOptions(pr), max = axisMax([pr]);
-  const likely = sec("How likely is a big game?", `${dotplot(pr, { max, threshold: thr, id: "dp-" + id, name: p.n, range: [Math.max(0, quantile(pr, 0.1)), quantile(pr, 0.9)] })}
+  const thr = live ? (S.ui.thr[id] ?? defaultThr(pr, pos)) : 0, opts = live ? thrOptions(pr) : [], max = live ? axisMax([pr]) : 0;
+  const likely = !live ? "" : sec("How likely is a big game?", `${dotplot(pr, { max, threshold: thr, id: "dp-" + id, name: p.n, range: [Math.max(0, quantile(pr, 0.1)), quantile(pr, 0.9)] })}
     <div class="cap" id="dp-${id}-cap">${dotCaption(pr, thr, p.n.split(" ")[0])}</div>
     <div class="thresholds" data-for="dp-${id}">${opts.map((t) => `<button data-thr="${t}" aria-pressed="${t === thr}">${t}+</button>`).join("")}</div>
     <p class="small muted" style="margin-top:10px">Each dot is one of 20 equally likely outcomes. Drag the line to ask a different question. ${S.ui.src !== "blend" ? "Ranges were checked against five seasons of results for the Blended projection; other sources use the same spread settings, which have not been checked separately:" : "Ranges were checked against five seasons of results:"} the real score landed inside the 10th-to-90th range about 80% of the time.</p>`);
@@ -68,7 +72,7 @@ export function viewPlayer(id) {
     return `Our stat model has no number for him this week, so this is ${base}.`;
   }
   let built = "";
-  if (pr.parts && M) {
+  if (live && pr?.parts && M) {
     const rows = [{ kind: "start", label: "Players who score like him usually get", note: "his recent games, pulled toward normal", v: pr.base }];
     const kept = M.kept, lab = {
       env: pr.implied != null ? `Vegas: ${esc(p.t)} expected to score ${f1(pr.implied)}` : "Vegas team total (no line yet)",
@@ -90,6 +94,7 @@ export function viewPlayer(id) {
     built = sec("Where the number comes from", `<p>${modelWhy(id, p, pr)}</p>`);
   }
 
+  if (!live) built = "";   // both branches above explain this week's number, so with no projection there is nothing to explain
   // 3. Where he stands
   let stands = "";
   if (u && u.n >= 3 && pos !== "K" && pos !== "DEF") {
@@ -112,7 +117,7 @@ export function viewPlayer(id) {
 
   // 5. Experts
   let experts = "";
-  if (pr.ecr) {
+  if (pr?.ecr) {
     const e = pr.ecr;
     experts = sec("What the experts think", `${rankRange(e, ours && ours <= 60 ? ours : null)}
       <div class="legend"><span><i class="l-band"></i>Range of expert rankings</span><span><i class="l-dia"></i>Consensus</span>${ours ? `<span><i class="l-us"></i>Where we rank him</span>` : ""}</div>
@@ -123,13 +128,13 @@ export function viewPlayer(id) {
 
   // 6. Matchup
   let matchupSec = "";
-  if (pr.opp && !["K", "DEF"].includes(pos)) {
+  if (pr?.opp && !["K", "DEF"].includes(pos)) {
     const d = defensePct(pr.opp, pos), sg = MODEL.proof.signals[pos]?.dvp, used = M?.kept.includes("dvp");
     if (d) matchupSec = sec("The matchup", `<p>${esc(pr.opp)} has allowed <b>${d.v >= 0 ? f0(d.v * 100) + "% more" : f0(-d.v * 100) + "% fewer"}</b> fantasy points to ${posLabel(pos)}s than the average defense, recently weighted. That is ${d.p >= 50 ? "friendlier" : "tougher"} than ${d.p >= 50 ? d.p : 100 - d.p}% of the league.</p>
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
   if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
-  return feedError() + hero + teamStrip(p.t) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + (pos === "DEF" ? defenseHow(p.t) + scheduleSection(p.t, "defense") : pos === "K" ? kickerHow(p.t, pr, L?.scoring || leagueOrDefault().scoring) + scheduleSection(p.t, "kicker") : playerTeamSections(id, p, u));
+  return feedError() + hero + teamStrip(p.t) + (pos === "DEF" ? defenseGate() : pos === "K" ? kickerGate() : teamsErrorGate()) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + (pos === "DEF" ? defenseMatchup(p.t, pr) + defenseHow(p.t) + defenseStands(p.t) + defenseVsPositions(p.t) + defenseRecent(p.t) + scheduleSection(p.t, "defense") : pos === "K" ? kickerConditionsSec(id, p, pr) + kickerNumbers(id, p) + kickMap(id, p) + kickerTeamMix(id, p) + kickerHow(p.t, pr, L?.scoring || leagueOrDefault().scoring) + scheduleSection(p.t, "kicker") : playerTeamSections(id, p, u));
 }
 
 function notesSection(id, C) {

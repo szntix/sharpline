@@ -36,11 +36,13 @@ export function gameRow(g) {
 function viewGames() {
   if (!S.feed) return feedError() + loading("the schedule");
   const games = S.feed.games, priced = games.filter((g) => g.line).length;
-  const ranked = [...games].sort((a, b) => (b.line ? b.line.total : -1) - (a.line ? a.line.total : -1));
+  // In kickoff order, soonest first. Games that kick off together keep the old order (highest total first, then no-line games), and a game with no time yet goes last.
+  const kick = (g) => (g.kickoff && Number.isFinite(Date.parse(g.kickoff)) ? Date.parse(g.kickoff) : Infinity);
+  const ranked = [...games].sort((a, b) => kick(a) - kick(b) || (b.line ? b.line.total : -1) - (a.line ? a.line.total : -1) || String(a.id).localeCompare(String(b.id)));
   return `${feedError()}<h1 class="h1" style="margin-top:8px">Week ${S.feed.week} slate</h1>
-    <p class="lede" style="margin-top:8px">Every game by how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense. A ▲ or ▼ beside a total shows how far it has moved since the line opened.</p>
+    <p class="lede" style="margin-top:8px">Every game in kickoff order, with how many points the betting market expects and how lopsided it should be. Shootouts lift passing games. Blowouts can bury the losing side's offense. A ▲ or ▼ beside a total shows how far it has moved since the line opened.</p>
     ${pulse(S.feed)}
-    <div class="sec" style="margin-top:20px"><div class="list"><div class="band"><span>Ranked by game total</span><span>${priced} of ${games.length} priced</span></div>${ranked.map(gameRow).join("") || `<p class="muted" style="padding:16px">No games found for this week.</p>`}</div>
+    <div class="sec" style="margin-top:20px"><div class="list"><div class="band"><span>By kickoff, then game total</span><span>${priced} of ${games.length} priced</span></div>${ranked.map(gameRow).join("") || `<p class="muted" style="padding:16px">No games found for this week.</p>`}</div>
       <p class="small muted" style="margin-top:8px">Each bar splits the game's expected points between the two teams, in their colors.</p></div>
     ${priced ? `<details class="mapd" style="margin-top:18px"><summary>Map view: totals against margins</summary><div style="padding-top:10px">${slateMap(games)}</div></details>` : ""}`;
 }

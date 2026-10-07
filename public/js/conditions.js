@@ -1,6 +1,6 @@
 import { points } from "./scoring.js";
 import { kickerStats, teamContext } from "./model.js";
-const MILD = { wind: 8.4, temp: 57.1 }, sg = (v) => (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(1);
+export const MILD = { wind: 8.4, temp: 57.1 }, sg = (v) => (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(1);
 
 // What the weather and roof are worth to this kicker this week, in his league's points, against a typical mild outdoor game.
 export function kickerConditions(pr, s) {
