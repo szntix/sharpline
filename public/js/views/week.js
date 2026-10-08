@@ -31,7 +31,7 @@ export function viewWeek() {
   } else if (m.win != null) {
     const w = m.alt ? m.alt.p : m.win;
     const pct = Math.round(w * 100), margin = m.me.p50 - m.them.p50, sdm = Math.hypot((m.me.p90 - m.me.p10) / 2.563, (m.them.p90 - m.them.p10) / 2.563), perPt = Math.max(1, Math.round(39.89 / sdm));
-    const edge = Math.abs(margin) < 0.5 ? `Dead even. Each point is worth about ${perPt}%.` : `${Math.abs(margin).toFixed(1)} points ${margin < 0 ? "from" : "clear of"} a coin flip. Each point is worth about ${perPt}%.`;
+    const edge = Math.abs(margin) < 0.5 ? `Dead even, and each point is worth about ${perPt}%.` : `${Math.abs(margin).toFixed(1)} points ${margin < 0 ? "from" : "clear of"} a coin flip, and each point is worth about ${perPt}%.`;
     // when the first game starts, and whether anyone in the lineup needs a look
     const nowMs = S.ui.now ?? Date.now(), ks = startIds.map((id) => kick(id)).filter((x) => x != null), future = ks.filter((x) => x > nowMs), dayTime = (ms) => new Date(ms).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }).replace(",", "");
     const done = startIds.length && startIds.every((id) => P.proj[id]?.game?.status?.completed);
@@ -41,11 +41,10 @@ export function viewWeek() {
     const chips = kickTxt || alertTxt ? `<div class="wc-chips">${kickTxt ? `<span class="wchip">${esc(kickTxt)}</span>` : ""}${alertTxt ? `<button class="wchip" data-act="jump-starters"><i></i>${esc(alertTxt)}</button>` : ""}</div>` : "";
     const oppSel = `<select data-bind="opponent" aria-label="This week's opponent"><option value="">None selected</option>${L.others.map((o) => `<option value="${o.id}" ${o.id === oppId ? "selected" : ""}>vs ${esc(o.name)}</option>`).join("")}</select>`;
     hero = `<section class="turf wcard" id="wcard"><div class="wc-head"><span class="wc-wk">${title()}</span>${oppSel}</div>
-      <div class="wc-row"><div class="hero-num wc-big">${pct}<small>%</small></div><div class="wc-cap">to beat<b>${esc(opp.name)}</b><em>${esc(edge)}</em></div></div>
-      ${fieldStrip(w, { label: `You ${pct}%` })}
-      <div class="wc-scores"><span><b>${f1(m.me.p50)}</b> you</span><span>projected</span><span><b>${f1(m.them.p50)}</b> them</span></div>
-      <div class="wc-range">likely ${f0(m.me.p10)} to ${f0(m.me.p90)} · ${f0(m.them.p10)} to ${f0(m.them.p90)}</div>${chips}</section>
-      <div class="wbug" id="wbug" data-act="to-top" aria-hidden="true"><div class="bgt"><div class="bgs"><small>You</small><span class="big">${f1(m.me.p50)}</span></div><div class="bgp">${pct}<small>%</small></div><div class="bgs r"><small>${esc(shortTeamName(opp.name))}</small><span class="big">${f1(m.them.p50)}</span></div></div>${fieldStrip(w, { label: `${pct}%`, compact: true })}<div class="bgl"><span>${esc(kickTxt)}</span><span>${esc(alertTxt)}</span></div></div>`;
+      <div class="wc-g3"><div class="s"><small>You</small><span class="big">${f1(m.me.p50)}</span><em>likely ${f0(m.me.p10)} to ${f0(m.me.p90)}</em></div><div class="p"><span class="pc">${pct}<small>%</small></span><em>to win</em></div><div class="s r"><small>${esc(shortTeamName(opp.name))}</small><span class="big">${f1(m.them.p50)}</span><em>likely ${f0(m.them.p10)} to ${f0(m.them.p90)}</em></div></div>
+      ${fieldStrip(w, { label: "\u00A0" })}
+      <p class="wc-note">${edge}</p>${chips}</section>
+      <div class="wbug" id="wbug" data-act="to-top" aria-hidden="true"><div class="bgt"><div class="bgs"><small>You</small><span class="big">${f1(m.me.p50)}</span></div><div class="bgp"><span>${pct}<small>%</small></span><em>to win</em></div><div class="bgs r"><small>${esc(shortTeamName(opp.name))}</small><span class="big">${f1(m.them.p50)}</span></div></div>${fieldStrip(w, { label: `${pct}%`, compact: true })}<div class="bgl"><span>${esc(kickTxt)}</span><span>${esc(alertTxt)}</span></div></div>`;
   } else {
     hero = `<section class="turf"><div class="sub">${title()}</div><div class="hero-num" style="margin-top:8px">${f1(late.total)}</div>
       <p style="margin-top:8px">Projected points, likely ${f0(m.me?.p10 ?? late.total * 0.82)} to ${f0(m.me?.p90 ?? late.total * 1.2)}.</p>

@@ -5,7 +5,7 @@ import { SLOT_ELIG, SLOT_LABEL, positionsFor, inPosition } from "../scoring.js";
 import { esc, f1, f0, sgn, posLabel, posClass, plate, teamStripe } from "../ui.js";
 import { luck } from "../charts.js";
 import { viewStreaming } from "./streaming.js";
-import { toneBy, loading, feedError, prow, emptyLeague, sec, syncLine } from "./shared.js";
+import { toneBy, loading, feedError, prow, emptyLeague, sec, syncLine, fold } from "./shared.js";
 
 // A player's position as a colored chip, so a name is never just text.
 const posTag = (id) => { const p = S.players[id]; return p ? `<span class="pos ${posClass(p.p)}">${esc(posLabel(p.p))}</span>` : ""; };
@@ -70,10 +70,15 @@ function viewWaivers(L) {
   const lede = `<div><p class="lede">Ranked by how much each free agent would add to your starting lineup. ${manual ? "Mark players other teams already have so they drop off this list." : "Rostered players are removed using your Sleeper league."}</p>${syncLine(L, "margin-top:6px")}</div>`;
   const segBar = (label, opts, cur, act, cls = () => "") => `<div class="seg" role="group" aria-label="${label}">${opts.map(([k, l]) => `<button data-act="${act}" data-v="${k}" class="${cls(k)}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
   const POSCLS = { QB: "qb", RB: "rb", WR: "wr", TE: "te", K: "k", DEF: "dst" };
+  const btns = (id) => `<button class="btn sm" data-act="add-mine" data-id="${id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${id}">Taken</button>` : ""}`;
+  // Trending adds: what other managers did in the last 24 hours (Sleeper's list, already loaded at start). It describes the crowd, it does not predict; the number on each row is ours.
+  const out = unavailableSet(L), tr = Object.entries(S.trending || {}).filter(([id, n]) => n > 0 && pl(id) && !L.roster.includes(id) && !out.has(id) && inPosition(pl(id).p, pos)).sort((x, y) => y[1] - x[1]).slice(0, 8);
+  const trend = tr.length ? fold("wv-trend", "Trending adds", `<div class="list">${tr.map(([id, n]) => prow(id, C, { gain: `${n.toLocaleString()} adds`, act: btns(id) })).join("")}</div><p class="small muted" style="margin-top:8px">The players most added across Sleeper leagues in the last 24 hours who are not on a roster in yours. That is what other managers are doing, not a projection: the number on the right is ours.</p>`, { badge: tr.length, headline: `Most added: ${pname(tr[0][0])} (${tr[0][1].toLocaleString()})`, heading: true }) : "";
+
   // the gain is a short number in the action row; the horizon bar above says whether it is the rest of the season or this week
   const gainOf = (r) => mode === "week" ? (r.weekGain > 0.05 ? `${sgn(r.weekGain)} pts` : "no gain") : (r.rosGain > 0.5 ? `${sgn(r.rosGain, 0)} pts` : "no gain");
-  return `${lede}${segBar("Horizon", [["ros", "Rest of season"], ["week", "This week"]], mode, "wv-mode")}${segBar("Position", positions.map((p) => [p, p === "ALL" ? "ALL" : posLabel(p)]), pos, "wv-pos", (k) => POSCLS[k] || "")}${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}
-    <div class="list">${rows.map((r) => prow(r.id, C, { gain: gainOf(r), act: `<button class="btn sm" data-act="add-mine" data-id="${r.id}">Add to my team</button>${manual ? `<button class="btn sm" data-act="take" data-id="${r.id}">Taken</button>` : ""}` })).join("") || `<p class="muted" style="padding:20px 16px">No free agents at this position improve your lineup.</p>`}</div>`;
+  return `${lede}${segBar("Horizon", [["ros", "Rest of season"], ["week", "This week"]], mode, "wv-mode")}${segBar("Position", positions.map((p) => [p, p === "ALL" ? "ALL" : posLabel(p)]), pos, "wv-pos", (k) => POSCLS[k] || "")}${W.drop ? `<div class="callout">If you need a roster spot, <b>${esc(pname(W.drop))}</b> costs you the least to drop.</div>` : ""}${trend}
+    <div class="list">${rows.map((r) => prow(r.id, C, { gain: gainOf(r), act: btns(r.id) })).join("") || `<p class="muted" style="padding:20px 16px">No free agents at this position improve your lineup.</p>`}</div>`;
 }
 
 // An empty list should say why. A suggestion has to help BOTH lineups, so it needs a position where you hold more than your lineup uses

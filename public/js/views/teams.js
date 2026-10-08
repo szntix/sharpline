@@ -139,22 +139,16 @@ export function defenseGate() {
 // For every other profile page: only speak up when the team data failed to load.
 export const teamsErrorGate = () => (!S.teams?.teams && S.errors.teams ? gateErr("the team table and schedule", "teams") : "");
 
-// D1: this week's matchup as three tug bars: our strength (left) against the opposing offense's weakness (right). Real ranks are printed on both sides.
+// D1: this week's matchup, in the same rows as the Game page: the opposing offense against this defense, pass and run, EPA ranks of 32.
 // It describes the matchup; it does not predict it: in 2021-2025 tests, opponent sack and giveaway rates added nothing beyond the betting line.
-const verdict = (o, w) => { const a = (o + w) / 2; return a <= 17 ? [a <= 12 ? "g2" : "g1", "Our edge"] : a <= 23 ? ["n", "Even"] : ["b1", "Their edge"]; };
 export function defenseMatchup(code, pr) {
-  const D = S.teams?.teams, A = defData()?.teams ? leagueDef() : null, t = D?.[code]; if (!t || !A?.[code]) return "";
+  const D = teamData(), t = D?.teams[code]; if (!t) return "";
   const g = pr?.game, c = g ? teamContext(g, code) : null, opp = c?.opp || null;
   if (!opp) return t.bye?.includes(S.feed?.week) ? sec("The matchup", `<div class="panel"><p class="m">Bye week. No opponent this week.</p></div>`, "this week") : "";
-  const O = A[opp], T2 = D[opp]; if (!O || !T2 || !T2.games) return "";
-  const me = A[code], live = Object.values(D).filter((v) => v.games), paRank = 1 + live.filter((v) => v.pa < t.pa - 1e-9).length, pfRank = 1 + live.filter((v) => v.pf > T2.pf + 1e-9).length;
-  const rows = [{ n: "Pressure", l: "sacks a game", o: me.skG, or: rankOf(A, code, (x) => x.skG), rl: "sacks taken", t: O.sksG, tr: rankOf(A, opp, (x) => x.sksG), wr: rankOf(A, opp, (x) => x.sksG) },
-    { n: "Takeaways", l: "takeaways a game", o: me.intG + me.frG, or: rankOf(A, code, (x) => x.intG + x.frG), rl: "giveaways", t: O.gvG, tr: rankOf(A, opp, (x) => x.gvG), wr: rankOf(A, opp, (x) => x.gvG) },
-    { n: "Scoring", l: "points allowed", o: t.pa, or: paRank, rl: "points scored", t: T2.pf, tr: pfRank, wr: 33 - pfRank }];
-  const bar = (r) => { const [tn, vt] = verdict(r.or, r.wr); return `<div class="pf-m"><div class="pf-mh"><span>${r.n}</span><span class="pf-v tone-${tn}">${vt}</span></div><div class="pf-bar" role="img" aria-label="${r.n}: ${code} ${r.o.toFixed(1)} ${r.l}, rank ${r.or}; ${esc(opp)} ${r.t.toFixed(1)} ${r.rl}, rank ${r.tr}. ${vt}."><span class="pf-half L tone-${rankTone(r.or)}"><i style="width:${((33 - r.or) / 32) * 100}%"></i></span><span class="pf-mid"></span><span class="pf-half R tone-${rankTone(r.wr)}"><i style="width:${((33 - r.wr) / 32) * 100}%"></i></span></div><div class="pf-sides"><span><b>${esc(code)}</b> ${r.o.toFixed(1)} ${r.l} \u00B7 #${r.or}</span><span>${r.t.toFixed(1)} ${r.rl} \u00B7 #${r.tr} <b>${esc(opp)}</b></span></div></div>`; };
-  const ours = rows.filter((r) => verdict(r.or, r.wr)[1] === "Our edge").length;
+  const O = D.teams[opp]; if (!O || t.games < 2 || O.games < 2) return "";
+  const rows = matchRow(O.eff?.passOff, t.eff?.passDef, opp, code, "pass") + matchRow(O.eff?.runOff, t.eff?.runDef, opp, code, "run"); if (!rows) return "";
   const line = c.oppImp != null ? `${esc(opp)} expected to score ${c.oppImp.toFixed(1)}${c.spread == null ? "" : ` (${esc(code)} ${c.spread > 0 ? "favored" : "underdog"} by ${Math.abs(c.spread)})`}` : `vs ${esc(opp)}`;
-  return sec("The matchup", `<div class="panel"><div class="pf-sum"><div><b>On paper: ${ours ? `our edge in ${ours} of 3` : "no clear edge"}</b><br><span>${line}</span></div></div>${rows.map(bar).join("")}<p class="pf-cap">Each bar is a contest: <b>our strength</b> on the left against <b>their weakness</b> on the right, longer is better for the defense. Ranks are of 32. For us 1 is best (most sacks and takeaways, fewest points allowed). For them 1 is the most sacks taken, giveaways or points scored; a strong offense makes a short bar.</p><p class="pf-cap"><b>This describes the matchup; it does not predict it.</b> In 2021\u20132025 tests, opponent sack and giveaway rates added nothing beyond the betting line, so the expected score already counts them.</p></div>`, "this week");
+  return sec("The matchup", `<div class="panel">${rows}<p class="tm-cap"><b>${line}.</b> Each bar is how strong that side has been this season (longer is better, rank 1 is best). A gap of 10 or more ranks is called an edge.</p><p class="tm-cap"><b>This describes the matchup; it does not predict it.</b> In 2021\u20132025 tests, opponent sack and giveaway rates added nothing beyond the betting line, so the expected score already counts them.</p></div>`, "this week");
 }
 
 // D2: where this defense stands. Eight categories on one rank track, strongest first; tap a row for its game-by-game numbers.
@@ -165,11 +159,21 @@ export function defenseStands(code) {
     { k: "Tackles for loss", v: a.tflG, r: rk((x) => x.tflG), f: (g) => g.tfl }, { k: "Passes defended", v: a.pdG, r: rk((x) => x.pdG), f: (g) => g.pd }, { k: "Pass yards allowed", v: a.pyG, r: rk((x) => x.pyG, true), f: (g) => g.py },
     { k: "Rush yards allowed", v: a.ryG, r: rk((x) => x.ryG, true), f: (g) => g.ry }, { k: "Points allowed", v: t.pa, r: 1 + live.filter((v) => v.pa < t.pa - 1e-9).length, f: (g) => g.pa }].sort((x, y) => x.r - y.r);
   const open = S.ui.defStand ?? null, one = (v) => (v == null ? "\u2013" : Number.isInteger(v) ? v : v.toFixed(1));
-  const row = (c) => `<button type="button" class="pf-lrow tone-${rankTone(c.r)}" data-act="def-stand" data-v="${esc(c.k)}" aria-expanded="${open === c.k}"><span class="nm">${c.k}<small>${val(c.v)} a game</small></span><span class="pf-track"><i class="pf-dot" style="left:${((c.r - 1) / 31) * 100}%"></i></span><span class="rk">#${c.r}</span></button>${open === c.k ? `<div class="pf-exp" role="region" aria-label="${c.k} by game">${games.map((g) => `<span>W${g.week} <b>${one(c.f(g))}</b></span>`).join("")}</div>` : ""}`;
+  const row = (c) => `<button type="button" class="pf-lrow tone-${rankTone(c.r)}" data-act="def-stand" data-v="${esc(c.k)}" aria-expanded="${open === c.k}" aria-label="${esc(c.k)}, ${val(c.v)} a game, ranked ${c.r} of 32"><span class="nm">${c.k}<small>${val(c.v)} a game</small></span><span class="pf-track"><i class="pf-dot" style="left:${((c.r - 1) / 31) * 100}%">${c.r}</i></span></button>${open === c.k ? `<div class="pf-exp" role="region" aria-label="${c.k} by game">${games.map((g) => `<span>W${g.week} <b>${one(c.f(g))}</b></span>`).join("")}</div>` : ""}`;
   const tile = (label, v, rank) => `<div class="dp-tile tone-${rankTone(rank)}"><small>${label}</small><b>${v}</b><span>#${rank}</span></div>`;
   const tiles = fp ? `<div class="dp-tiles" style="margin-bottom:12px">${tile("Fantasy points", `${fp.avg.toFixed(1)} a game`, fp.rAvg)}${tile("Fantasy, last 3", `${fp.l3.toFixed(1)} a game`, fp.rL3)}</div>` : "";
   const note = defData().fallback ? `<p class="tm-cap">Last season's final numbers, until this season's games are played.</p>` : "";
-  return sec("Where this defense stands", `<div class="panel">${tiles}<div class="pf-axis"><span>best</span><span>worst</span></div>${cats.map(row).join("")}<p class="tm-cap">Per game over ${a.n} game${a.n === 1 ? "" : "s"}, from nflverse, ranked of 32. All eight on one track, strongest first, so you see what this defense is built on and where it leaks. Tap a row for the game-by-game numbers. Fantasy points use your league's scoring; ${Math.round(a.tot.td + a.tot.stt)} defensive or special-teams touchdown${Math.round(a.tot.td + a.tot.stt) === 1 ? "" : "s"} so far.</p>${note}</div>`, "rank of 32");
+  return sec("Where this defense stands", `<div class="panel">${tiles}<div class="pf-axis"><span>best</span><span>worst</span></div>${cats.map(row).join("")}<p class="tm-cap">Per game over ${a.n} game${a.n === 1 ? "" : "s"} (nflverse), ranked of 32, strongest first. Tap a row for the game-by-game numbers. Fantasy points use your league's scoring.</p>${note}</div>`, "rank of 32");
+}
+
+// Compare rows for two defenses, from the same helpers as the profile's "Where this defense stands", so the two pages cannot disagree.
+export function defenseCompareRows(codeA, codeB) {
+  const A = defData()?.teams ? leagueDef() : null, D = S.teams?.teams; if (!A?.[codeA] || !A?.[codeB] || !D?.[codeA] || !D?.[codeB]) return [];
+  const sc = defScoring(), fa = defenseFp(codeA, sc), fb = defenseFp(codeB, sc), a = A[codeA], b = A[codeB], f1 = (v) => (v == null ? "\u2013" : v.toFixed(1)), rows = [];
+  if (fa && fb) rows.push({ label: "Fantasy pts/game", a: fa.avg, b: fb.avg, fa: f1(fa.avg), fb: f1(fb.avg) }, { label: "Last 3 games", a: fa.l3, b: fb.l3, fa: f1(fa.l3), fb: f1(fb.l3) });
+  rows.push({ label: "Sacks/game", a: a.skG, b: b.skG, fa: f1(a.skG), fb: f1(b.skG) }, { label: "Takeaways/game", a: a.intG + a.frG, b: b.intG + b.frG, fa: f1(a.intG + a.frG), fb: f1(b.intG + b.frG) },
+    { label: "Points allowed/game", a: D[codeA].pa, b: D[codeB].pa, fa: f1(D[codeA].pa), fb: f1(D[codeB].pa), lowerBetter: true });
+  return rows;
 }
 
 export function defenseVsPositions(code) {
@@ -200,7 +204,8 @@ export function defenseRecent(code) {
   const head = `<div class="dp-lrow head"><span>Wk</span><span class="o">Opponent</span><span>PA</span><span>Sacks</span><span>TO</span><span class="y">Yds</span><span>FP</span></div>`;
   const avg = `<div class="dp-lrow avg"><span></span><span class="o">Average</span><span>${(all.filter((x) => x.pa != null).reduce((s, x) => s + x.pa, 0) / Math.max(1, all.filter((x) => x.pa != null).length)).toFixed(1)}</span><span>${A.skG.toFixed(1)}</span><span>${(A.intG + A.frG).toFixed(1)}</span><span class="y">${Math.round(A.pyG + A.ryG)}</span><b>${fpAll ? fpAll.avg.toFixed(1) : "\u2013"}</b></div>`;
   const rowBtn = (x) => `<button type="button" class="dp-lrow rowbtn${x.week === sel ? " sel" : ""}" data-act="def-week" data-v="${x.week}" aria-pressed="${x.week === sel}">${cells(x)}</button>`;
-  return sec("Recent games", `<div class="panel dp-log">${chart}<div class="pf-callout" role="status">${callout}</div>${head}${avg}${[...shown].reverse().map(rowBtn).join("")}${older.length ? fold("deflog:earlier", `Earlier games (${older.length})`, older.map((x) => `<div class="dp-lrow">${cells(x)}</div>`).join("")) : ""}<p class="pf-cap">Tap a bar or a row to select a game. PA is points allowed. TO is takeaways (interceptions plus fumble recoveries). Yds is what the other offense gained. FP is fantasy points under your league's scoring.</p></div>`, "fantasy points by game");
+  const logBody = `${head}${avg}${[...shown].reverse().map(rowBtn).join("")}${older.map((x) => `<div class="dp-lrow">${cells(x)}</div>`).join("")}`;
+  return sec("Recent games", `<div class="panel dp-log">${chart}<div class="pf-callout" role="status">${callout}</div>${fold("deflog", `Game log (${all.length})`, logBody)}<p class="pf-cap">Tap a bar to select a game. In the log, PA is points allowed, TO is takeaways (interceptions plus fumble recoveries), Yds is what the other offense gained, and FP is fantasy points under your league's scoring.</p></div>`, "fantasy points by game");
 }
 
 export function kickerHow(code, pr, s) {
@@ -213,7 +218,7 @@ export function viewTeams() {
   const D = S.teams;
   if (!D) { if (!S.errors.teams) loadTeams(); return S.errors.teams ? `<div class="panel empty"><h2 class="h2">Team data is unavailable</h2><p class="muted small" style="margin:6px 0 12px">${esc(S.errors.teams)}</p><button class="btn" data-act="teams-retry">Try again</button></div>` : loading("the teams"); }
   const rows = D.order.map((c) => { const t = D.teams[c], d = t.prevRank - t.rank, nx = t.ahead[0], chg = t.games < 2 || !d ? `<small class="tm-chg">–</small>` : `<small class="tm-chg tone-${d > 0 ? "g2" : "b2"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</small>`;
-    return `<div class="row rowlink" data-go="team/${c}" style="--team:${teamStripe(c)}">${plate(c)}<div class="who"><span class="name"><span class="tm-rkn">${t.rank}</span><span class="nm">${esc(t.name)}</span></span><span class="sub"><span class="meta">${t.record[0]}–${t.record[1]}${t.record[2] ? `–${t.record[2]}` : ""}${nx ? ` · ${nx.home ? "vs" : "at"} ${nx.opp}` : ""}</span></span></div><div class="proj"><span class="num tone-${rankTone(t.rank)}">${sgn(t.rating, 1)}</span>${chg}</div></div>`; }).join("");
+    return `<div class="row rowlink trow" data-go="team/${c}" style="--team:${teamStripe(c)}">${plate(c)}<div class="who"><span class="name"><span class="tm-rkn">${t.rank}</span><span class="nm">${esc(t.name)}</span></span><span class="sub"><span class="meta">${t.record[0]}–${t.record[1]}${t.record[2] ? `–${t.record[2]}` : ""}${nx ? ` · ${nx.home ? "vs" : "at"} ${nx.opp}` : ""}</span></span></div><div class="proj"><span class="num tone-${rankTone(t.rank)}">${sgn(t.rating, 1)}</span>${chg}</div></div>`; }).join("");
   const off = D.fallback ? fold("teams-offseason", "Last season's table", `The ${D.fallback.wanted} schedule is not out yet, so this is the final ${D.fallback.season} table. It switches to ${D.fallback.wanted} on its own once the schedule is published.`, { headline: `The ${D.fallback.wanted} schedule is not out yet`, tone: "b1" }) : "";
   const early = D.fallback ? "" : D.throughWeek < 3 ? fold("teams-early", "Early in the season", `Only ${D.throughWeek} ${D.throughWeek === 1 ? "week" : "weeks"} played, so ratings lean on last season until week 3.`, { headline: "Ratings lean on last season until week 3", tone: "b1" }) : "";
   const b = D.backtest;
@@ -303,10 +308,16 @@ export function gameOdds(g) {
   const pH = winOdds(L.spread), pA = 1 - pH, ca = teamStripe(g.away), ch = teamStripe(g.home);
   return sec("Win odds", `<div class="panel"><div class="tm-odds" role="img" aria-label="${esc(g.away)} ${Math.round(pA * 100)} percent, ${esc(g.home)} ${Math.round(pH * 100)} percent"><div style="width:${(pA * 100).toFixed(1)}%;background:${ca}"></div><div style="flex:1;background:${ch}"></div></div><div class="tm-line" style="font-weight:800"><span>${esc(g.away)} ${Math.round(pA * 100)}%</span><span>${esc(g.home)} ${Math.round(pH * 100)}%</span></div><p class="tm-cap">From the betting line, which in a 3,408-game test beat every rating we could build. Not a prediction of our own.</p></div>`);
 }
+// The approved matchup row, shared by the Game page and the defense profile: the offense on the left against the defense it faces on the right, longer is better, rank 1 is best (EPA ranks of 32).
+// An edge is a gap of 10 or more ranks and is named by team (never "ours"). Below that the middle stays empty: no "even" label.
+export function matchRow(o, d, ot, dt, kind) {
+  if (!o || !d) return "";
+  const gap = d.rank - o.rank, edge = gap >= 10 ? `${ot} edge` : gap <= -10 ? `${dt} edge` : "", w = (r) => (((33 - r) / 32) * 100).toFixed(0);
+  return `<div class="mu"><div class="mu-t"><span><b>${esc(ot)}</b> ${kind} offense</span><span>vs <b>${esc(dt)}</b> ${kind} defense</span></div><div class="face"><div class="l tone-${rankTone(o.rank)}"><i style="width:${w(o.rank)}%"></i></div><div class="r tone-${rankTone(d.rank)}"><i style="width:${w(d.rank)}%"></i></div></div><div class="mu-rk"><span>#${o.rank} of 32</span><span class="edge">${esc(edge)}</span><span>#${d.rank} of 32</span></div></div>`;
+}
 export function gameMatchups(g) {
   const D = teamData(), A = D?.teams[g.away], H = D?.teams[g.home]; if (!A || !H || A.games < 2 || H.games < 2) return "";
-  const row = (o, d, ot, dt, kind) => { if (!o || !d) return ""; const gap = d.rank - o.rank, edge = gap >= 10 ? `${ot} edge` : gap <= -10 ? `${dt} edge` : "even", w = (r) => (((33 - r) / 32) * 100).toFixed(0);
-    return `<div class="mu"><div class="mu-t"><span><b>${esc(ot)}</b> ${kind} offense</span><span>vs <b>${esc(dt)}</b> ${kind} defense</span></div><div class="face"><div class="l tone-${rankTone(o.rank)}"><i style="width:${w(o.rank)}%"></i></div><div class="r tone-${rankTone(d.rank)}"><i style="width:${w(d.rank)}%"></i></div></div><div class="mu-rk"><span>#${o.rank} of 32</span><span class="edge">${esc(edge)}</span><span>#${d.rank} of 32</span></div></div>`; };
+  const row = matchRow;
   const rows = row(A.eff.passOff, H.eff.passDef, g.away, g.home, "pass") + row(A.eff.runOff, H.eff.runDef, g.away, g.home, "run") + row(H.eff.passOff, A.eff.passDef, g.home, g.away, "pass") + row(H.eff.runOff, A.eff.runDef, g.home, g.away, "run");
   return rows ? sec("The matchups", `<div class="panel">${rows}<p class="tm-cap">Each bar is how strong that side has been this season (longer is better, rank 1 is best). A gap of 10 or more ranks is called an edge. It shows how they have played; the line already prices it.</p></div>`, "offense against defense") : "";
 }

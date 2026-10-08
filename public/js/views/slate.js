@@ -1,3 +1,4 @@
+import { weatherTheme, totalTone } from "../conditions.js";
 import { S, computed, pl } from "../state.js";
 import { teamContext } from "../model.js";
 import { esc, f1, sgn, kickoffText, ago, plate, emblem, isDark } from "../ui.js";
@@ -33,6 +34,12 @@ export function gameRow(g) {
     <div class="gmeta"><b>${esc(kickoffText(g))}</b>${g.line ? `<span class="nw">${esc(spr)}, total ${g.line.total}${moveText(g.line)}</span>` : `<span>Line not posted yet</span>`}<span>${esc(wxLine(g))}</span></div></a>`;
 }
 
+// The three tiles under the team plates: the total (faintly tinted at the extremes), the favorite (in its nameplate colors, no logo: the plate above already has it), and the weather (a soft wash and its words).
+function gameTiles(g, L, tot) {
+  const tt = totalTone(L.total), fav = L.spread === 0 ? null : L.spread > 0 ? g.home : g.away, fc = fav ? teamColors(fav, false) : null, w = weatherTheme(g);
+  return `<div class="stat3" style="margin-top:12px"><div${tt ? ` class="${tt}"` : ""}><span class="num">${tot}</span><small>Total points</small></div>${fav ? `<div class="fav" style="--tc:${fc.plate};--tci:${fc.plateInk}"><span class="num">${Math.abs(L.spread)}</span><small>${esc(fav)} favored</small></div>` : `<div><span class="num">0</span><small>Pick'em</small></div>`}<div${w.key ? ` class="wx wx-${w.key}"` : ""}><span class="num">${esc(w.num)}</span><small>${esc(w.label)}</small></div></div>`;
+}
+
 function viewGames() {
   if (!S.feed) return feedError() + loading("the schedule");
   const games = S.feed.games, priced = games.filter((g) => g.line).length;
@@ -63,7 +70,7 @@ export function viewGame(id) {
   const C = computed(); const L = g.line;
   const ch = teamContext(g, g.home), ca = teamContext(g, g.away);
   const tot = L ? L.total : null;
-  const top = (team) => Object.values(C.P.proj).filter((p) => pl(p.id)?.t === team && ["QB", "RB", "WR", "TE"].includes(pl(p.id).p) && p.mean > 0).sort((a, b) => b.mean - a.mean).slice(0, 6).map((p) => p.id);
+  const top = (team) => Object.values(C.P.proj).filter((p) => pl(p.id)?.t === team && ["QB", "RB", "WR", "TE", "K", "DEF"].includes(pl(p.id).p) && p.mean > 0).sort((a, b) => b.mean - a.mean).slice(0, 8).map((p) => p.id);
   const ids = [...top(g.away), ...top(g.home)];
   const notes = [];
   if (L) {
@@ -78,16 +85,16 @@ export function viewGame(id) {
   return `<a class="link" href="#slate" style="display:inline-block;margin:6px 0">Back to the slate</a>
     <p class="muted small" style="margin:2px 0 10px">${esc(kickoffText(g))}${g.venue?.name ? `, ${esc(g.venue.name)}` : ""}${g.tv ? `, ${esc(g.tv)}` : ""}</p>
     <div class="gh">${[[g.away, "Away", ca], [g.home, "Home", ch]].map(([ab, lab, cx]) => { const c = teamColors(ab, false); return `<div style="--tc:${c.plate};--tci:${c.plateInk}">${emblem(ab)}<small>${lab}</small><a class="ab" href="#team/${esc(ab)}" aria-label="${esc(ab)} team profile">${esc(ab)}</a><small>${done ? (ab === g.away ? g.awayScore : g.homeScore) + " final" : cx?.imp != null ? f1(cx.imp) + " expected points" : ""}</small></div>`; }).join("")}</div>
-    ${L ? `<div class="stat3" style="margin-top:12px"><div><span class="num">${tot}</span><small>Total points</small></div><div><span class="num">${L.spread === 0 ? "0" : Math.abs(L.spread)}</span><small>${L.spread === 0 ? "Pick'em" : `${L.spread > 0 ? esc(g.home) : esc(g.away)} favored`}</small></div><div><span class="num">${g.venue?.indoor ? "Dome" : g.forecast ? g.forecast.wind : g.weather?.temp ?? "–"}</span><small>${g.venue?.indoor ? "No weather" : g.forecast ? "mph wind" : "degrees"}</small></div></div>` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
+    ${L ? `${gameTiles(g, L, tot)}` : `<p style="margin-top:14px">${done ? "Final." : "The line hasn't been posted yet."}</p>`}
     ${L ? `<p class="small muted" style="margin-top:8px">${esc(L.book)}${done && !/closing/i.test(L.book) ? ", closing line" : ""}. ${L.totalOpen != null ? "Movement since the line opened is below." : ""}</p>` : ""}
     ${gameOdds(g)}
     ${notes.length ? fold("game-notes", "What to know", noteList(notes), { badge: notes.length, headline: notes[0].s, tone: notes.some((n) => n.t === "down") ? "b1" : "g2", heading: true }) : ""}
-    ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
     ${gameMatchups(g)}
     ${gameTotalContext(g)}
-    ${ids.length ? sec("Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`) : ""}
+    ${L && L.totalOpen != null ? sec("Line movement", moveRail("Total", L.totalOpen, L.total) + moveRail(`${esc(g.home)} spread`, L.spreadOpen == null ? null : -L.spreadOpen, -L.spread, true), "Sharp money moves lines") : ""}
     ${gameVolume(g, C)}
-    ${dvpSection(g)}`;
+    ${dvpSection(g)}
+    ${ids.length ? fold("game-players", "Fantasy players in this game", `<div class="list">${ids.map((i) => prow(i, C)).join("")}</div>`, { badge: ids.length, headline: `${ids.length} player${ids.length === 1 ? "" : "s"} in this game`, heading: true }) : ""}`;
 }
 
 // How each defense has treated each position this season, against the league average (recency weighted, from nflverse), colored from the point of

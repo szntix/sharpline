@@ -72,8 +72,8 @@ function viewAccount() {
     <dl class="kv"><dt>App version</dt><dd>${VERSION} (${BUILT})</dd><dt>Signed in as</dt><dd>${esc(S.user)}</dd><dt>Season and week</dt><dd>${F ? `${F.season}, week ${F.week}` : "–"}</dd><dt>Data checked</dt><dd>${F ? ago(F.fetchedAt) : "–"}</dd><dt>Game logs through week</dt><dd>${S.usage?.throughWeek ?? "–"}</dd></dl>
     <div class="toolbar"><button class="btn" data-act="reload">Check for new data</button><button class="btn" data-act="signout">Sign out</button></div>
     <p class="small muted">Data refreshes on its own. The button asks the server for the latest right now.</p>
-      <div><div class="small muted" style="margin-bottom:6px">Team color on player rows</div><div class="seg" role="group" aria-label="Team color on player rows">${[["off", "Off"], ["on", "On"]].map(([k, l]) => `<button data-act="tint" data-v="${k}" aria-pressed="${(document.documentElement.dataset.tint || "off") === k}">${l}</button>`).join("")}</div>
-      <p class="small muted" style="margin-top:6px">On tints each row with its team's color. Off keeps rows plain, with the team shown as the stripe on the left.</p></div></div></section>`;
+      <div><div class="small muted" style="margin-bottom:6px">Team color on rows</div><div class="seg" role="group" aria-label="Team color on rows">${[["off", "Off"], ["on", "On"]].map(([k, l]) => `<button data-act="tint" data-v="${k}" aria-pressed="${(document.documentElement.dataset.tint || "off") === k}">${l}</button>`).join("")}</div>
+      <p class="small muted" style="margin-top:6px">On tints each player row and each team in the Slate team list with its team's color. Off keeps those rows plain, with the team shown as the stripe on the left. Team profiles and games are always colored.</p></div></div></section>`;
 }
 
 // ---- Sleeper import ----

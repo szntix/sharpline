@@ -33,7 +33,7 @@ export function feedError() {
 // One player row, always two lines so every row is the same size: the name, position and status on top, and below it
 // the game on the left with at most two short condition tags on the right. The full sentence for each tag is on the
 // player page and is read out to screen readers. The team shows as a stripe on the left edge.
-export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, gain = "", showExp = false, value = "blend" } = {}) {
+export function prow(id, C, { slot = null, sig = false, act = "", dim = false, pick = false, gain = "", showExp = false, value = "blend", nopos = false } = {}) {
   const p = pl(id), pr = C.P.proj[id]; if (!p) return "";
   const pos = p.p, g = pr?.game;
   const where = pos === "DEF" || !p.t ? "" : pr?.bye ? "Bye week" : pr?.opp ? `${g.home === p.t ? "vs" : "at"} ${pr.opp} · ${kickoffText(g)}` : "";
@@ -55,7 +55,7 @@ export function prow(id, C, { slot = null, sig = false, act = "", dim = false, p
     : slot ? `<span class="pos ${posClass(flexy ? pos : slot)}"${flexy ? ` title="${esc(SLOT_LABEL[slot] || slot)}, ${esc(posLabel(pos))}" aria-label="${esc(SLOT_LABEL[slot] || slot)} slot, ${esc(posLabel(pos))}"` : ""}>${esc(SLOT_LABEL[slot] || slot)}</span>` : plate(p.t);
   return `<div class="row rowlink${slot || pick ? " slotted" : ""}${dim ? " dim" : ""}" data-go="player/${id}" style="--team:${teamStripe(p.t)}">
     ${lead}
-    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${slot && (slot === pos || flexy || (slot === "DEF" && pos === "DEF")) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
+    <div class="who"><span class="name"><span class="nm">${esc(p.n)}</span>${nopos || (slot && (slot === pos || flexy || (slot === "DEF" && pos === "DEF"))) ? "" : `<span class="pos ${posClass(pos)}">${esc(posLabel(pos))}</span>`}${chip}</span>
       <span class="sub"><span class="meta">${esc(where || p.t || "No team")}${exp}</span></span></div>
     <div class="proj">${shownNum}</div>
     ${act || gainHtml ? `<div class="act">${act}${gainHtml}</div>` : ""}</div>`;

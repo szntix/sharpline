@@ -1,5 +1,5 @@
 // Small shared helpers for every view.
-import { teamColors, logoUrl } from "./teams.js";
+import { teamColors, ghostKind, logoUrl } from "./teams.js";
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 export const f1 = (x) => (x == null || !isFinite(x) ? "–" : (Math.round(x * 10) / 10).toFixed(1));
 export const f0 = (x) => (x == null || !isFinite(x) ? "–" : Math.round(x).toString());
@@ -47,8 +47,8 @@ export function plate(abbr, { mono = false } = {}) {
 // both themes, and if the image does not load nothing is left behind. A light team color gets a dark silhouette.
 export function emblem(abbr) {
   const url = logoUrl(abbr); if (!url) return "";
-  const lite = teamColors(abbr, false).plateInk === "#111111";     // dark text on a light panel: a light silhouette; white text on a dark panel: a dark one
-  return `<img class="emblem${lite ? " lite" : ""}" src="${url}" alt="" aria-hidden="true" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+  const kind = ghostKind(abbr);     // tone on tone: a light panel gets a light silhouette, a dark panel a dark one, and a near-black panel a light one (see ghostKind)
+  return `<img class="emblem${kind ? " " + kind : ""}" src="${url}" alt="" aria-hidden="true" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
 }
 
 // A small ring that shows how likely a player is to play: full is healthy, empty is out.
@@ -73,6 +73,8 @@ export function toast(msg) {
 }
 
 // Percentile of value within sorted array (0-100)
+// His rank among a sorted (ascending) cohort, 1 is best, ties share the better rank; n is the cohort size.
+export function rankIn(sorted, v) { if (!sorted.length || v == null) return null; let hi = 0; while (hi < sorted.length && sorted[hi] <= v) hi++; return { rank: sorted.length - hi + 1, n: sorted.length }; }
 export function percentile(sorted, v) {
   if (!sorted.length) return null;
   let lo = 0; while (lo < sorted.length && sorted[lo] < v) lo++;

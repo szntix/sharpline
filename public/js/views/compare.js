@@ -5,6 +5,8 @@ import { quantile } from "../engine.js";
 import { esc, f1, f0, pct, posLabel, kickoffText, plate, emblem, isDark } from "../ui.js";
 import { teamColors } from "../teams.js";
 import { dotplot, dotCaption, axisMax, mirrorRows } from "../charts.js";
+import { kickerCompareRows } from "./kicker.js";
+import { defenseCompareRows, defenseGate } from "./teams.js";
 import { loading, feedError, sec } from "./shared.js";
 
 function picker(a) {
@@ -39,6 +41,8 @@ export function viewCompare(a, b) {
   ];
   if (pa.p !== "QB" && pb.p !== "QB") rows.push({ label: "Targets/game", a: u(a)?.tgt, b: u(b)?.tgt, fa: f1(u(a)?.tgt), fb: f1(u(b)?.tgt) }, { label: "Target share", tol: 0.005, a: u(a)?.ts, b: u(b)?.ts, fa: u(a) ? pct(u(a).ts) : "–", fb: u(b) ? pct(u(b).ts) : "–" });
   if (["RB", "QB"].includes(pa.p) || ["RB", "QB"].includes(pb.p)) rows.push({ label: "Carries/game", a: u(a)?.car, b: u(b)?.car, fa: f1(u(a)?.car), fb: f1(u(b)?.car) });
+  if (pa.p === "K" && pb.p === "K") rows.push(...kickerCompareRows(a, pa, b, pb));
+  if (pa.p === "DEF" && pb.p === "DEF") rows.push(...defenseCompareRows(pa.t, pb.t));
   const ea = C.ranks.exp[a], eb = C.ranks.exp[b];
   const xad = (id) => u(id)?.adv, xpct = (v) => (v * 100).toFixed(1) + "%", xsg = (d) => (v) => (v >= 0 ? "+" : "") + v.toFixed(d);
   const XADV = [["epaDb", "EPA/dropback", xsg(2)], ["cpoe", "CPOE", xsg(1)], ["rushEpa", "EPA/carry", xsg(2)], ["recEpa", "EPA/target", xsg(2)], ["wopr", "WOPR", (v) => v.toFixed(2)], ["ays", "Air yards share", xpct], ["adot", "Depth of target", (v) => v.toFixed(1)], ["yac", "YAC/catch", (v) => v.toFixed(1)], ["catchRate", "Catch rate", xpct]];
@@ -59,8 +63,8 @@ export function viewCompare(a, b) {
       const verb = (xs) => (xs.length > 1 || xs[0] === "The experts" ? "favor" : "favors"), lc = (s) => s.replace(/^The /, "the "), all = votes.map(([l]) => l);
       verdict.push(forA.length && forB.length ? `${list(forA)} ${verb(forA)} ${esc(short(pa.n))}; ${lc(list(forB))} ${verb(forB)} ${esc(short(pb.n))}.` : `${votes.length === 3 ? "All three sources" : list(all)} ${votes.length === 3 ? "favor" : verb(all)} ${esc(short((forA.length ? pa : pb).n))}.`); } }
   // Only stats that mean something for the positions being compared (a row must apply to both).
-  const BASE = ["Projection", "Bad week", "Great week", "Team points", "Matchup & game", "Recent avg", "Expert rank"], REL = { QB: [...BASE, "Carries/game", "EPA/dropback", "CPOE", "EPA/carry"], RB: [...BASE, "Carries/game", "Targets/game", "Target share", "EPA/carry", "EPA/target", "Catch rate"], WR: [...BASE, "Targets/game", "Target share", "WOPR", "Air yards share", "Depth of target", "YAC/catch", "EPA/target", "Catch rate"] }; REL.TE = REL.WR;
-  rows.splice(0, rows.length, ...rows.filter((r) => (REL[pa.p] || BASE).includes(r.label) && (REL[pb.p] || BASE).includes(r.label) && !(r.label === "Matchup & game" && (r.a == null || r.b == null))));
+  const BASE = ["Projection", "Bad week", "Great week", "Team points", "Matchup & game", "Recent avg", "Expert rank"], REL = { QB: [...BASE, "Carries/game", "EPA/dropback", "CPOE", "EPA/carry"], RB: [...BASE, "Carries/game", "Targets/game", "Target share", "EPA/carry", "EPA/target", "Catch rate"], WR: [...BASE, "Targets/game", "Target share", "WOPR", "Air yards share", "Depth of target", "YAC/catch", "EPA/target", "Catch rate"], TE: [...BASE, "Targets/game", "Target share", "WOPR", "Air yards share", "Depth of target", "YAC/catch", "EPA/target", "Catch rate"], K: [...BASE, "Fantasy pts/game", "Kicks tried/game", "FG accuracy", "Longest"], DEF: [...BASE, "Fantasy pts/game", "Last 3 games", "Sacks/game", "Takeaways/game", "Points allowed/game"] }; REL.TE = REL.WR;
+  rows.splice(0, rows.length, ...rows.filter((r) => (REL[pa.p] || BASE).includes(r.label) && (REL[pb.p] || BASE).includes(r.label) && !(r.label === "Matchup & game" && (r.a == null || r.b == null)) && !(r.a == null && r.b == null)));
   // Each bar is measured against this week's best at the position(s) being compared, with a tick for a typical starter (the last starter league-wide).
   const xpool = Object.keys(C.P.proj).filter((id) => [pa.p, pb.p].includes(pl(id)?.p) && C.P.proj[id].mean > 0);
   const xk = Math.max(1, (S.profile?.leagues?.find((l) => l.id === S.profile.active)?.teams || 12) * (["RB", "WR"].includes(pa.p) ? 2 : 1));
@@ -84,7 +88,7 @@ export function viewCompare(a, b) {
       <div class="toolbar" style="gap:8px;margin:16px 0 2px">${plate(pb.t, { mono: true })}<b>${esc(pb.n)}</b></div>${dotplot(B, { max, color: vB, threshold: thr, id: "cmpB", name: pb.n, group: gkey, who: short(pb.n) })}
       <div class="cap" id="cmpB-cap">${dotCaption(B, thr, short(pb.n))}</div>
       <p class="small muted" style="margin-top:10px">Same ruler and the same line for both. The more spread out the dots, the less predictable the week.</p>`)}
-    ${sec("Side by side", mirrorRows(rows, { ta: vA, tb: vB }) + `<p class="small muted" style="margin-top:10px">Each bar is measured against this week's best at the position: a full bar is the leader. The tick marks a typical starter (the last one in a league your size). The solid bar is the better of the two. A bad week and a great week are the 1-in-10 outcomes; for expert rank, lower is better.</p>`, "Solid bar wins")}
+    ${pa.p === "DEF" || pb.p === "DEF" ? defenseGate() : ""}${sec("Side by side", mirrorRows(rows, { ta: vA, tb: vB }) + `<p class="small muted" style="margin-top:10px">Each bar is measured against this week's best at the position: a full bar is the leader. The tick marks a typical starter (the last one in a league your size). The solid bar is the better of the two. A bad week and a great week are the 1-in-10 outcomes; for expert rank, lower is better.</p>`, "Solid bar wins")}
     ${sec("How much to trust this", `<p>${recent ? `Across ${recent.n.toLocaleString()} past ${posLabel(pa.p)} pairings with a gap like this (${recent.gap[0]} to ${recent.gap[1] > 50 ? "more than 8" : recent.gap[1]} projected points), the higher-projected player scored more <b>${Math.round(recent.higher_wins * 100)}%</b> of the time.` : "Different positions can't be checked against past pairings, so this percentage uses the average of the two positions' history."} Projections narrow the odds but never settle them: even an 8-point edge loses about one time in seven.</p>
       ${rho ? `<p class="small muted" style="margin-top:8px">These two are ${A.team === B.team ? "teammates" : "opponents"}, so their scores tend to move ${rho > 0 ? "together" : "against each other"} (correlation ${rho.toFixed(2)}). That is included.</p>` : ""}`)}`;
 }

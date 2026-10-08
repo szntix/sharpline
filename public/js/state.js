@@ -139,7 +139,7 @@ export async function refreshSharedQuiet() {
   S.sharedAt = Date.now(); if (changed) { invalidate(); render(); } return changed;
 }
 
-// The team figures load the first time a team screen opens, not at startup.
+// The team figures (with each defense's games) load quietly 2.5 s after start (app.js), or on first need, and refresh with the other shared data.
 // A failed or slow first request used to leave every profile page without its team sections until someone visited Teams and tapped Retry.
 // Now a failure tries again by itself (4 s, 12 s, then 30 s later), then stops, and the page says what is happening in the meantime.
 const retryMs = () => (typeof window !== "undefined" && window.__retryMs) || [4000, 12000, 30000];

@@ -6,7 +6,7 @@ import { points } from "../scoring.js";
 import { kickerStats, teamContext } from "../model.js";
 import { MILD } from "../conditions.js";
 import { esc } from "../ui.js";
-import { sec } from "./shared.js";
+import { sec, fold } from "./shared.js";
 import { rankTone, defenseGate } from "./teams.js";
 
 const sc = () => league()?.scoring || leagueOrDefault().scoring;
@@ -62,6 +62,15 @@ export function kickerNumbers(id, p) {
   return sec("By the numbers", `<div class="panel"><div class="dp-tiles">${tiles}</div><p class="tm-cap">This season, ${m.n} game${m.n === 1 ? "" : "s"}, from nflverse. Ranks are among the ${N} kickers with two or more games (accuracy: five or more kicks); 1 is best. Fantasy points use your league's scoring.</p></div>`, `${m.n} game${m.n === 1 ? "" : "s"}`);
 }
 
+// Compare rows for two kickers, from the same per-kicker totals the profile's "By the numbers" uses, so the two pages cannot disagree.
+export function kickerCompareRows(idA, pA, idB, pB) {
+  const kA = findKicker(idA, pA), kB = findKicker(idB, pB); if (!kA || !kB) return [];
+  const T = league_().per, a = T.find((x) => x.k === kA), b = T.find((x) => x.k === kB); if (!a?.n || !b?.n) return [];
+  const f1 = (v) => (v == null ? "\u2013" : v.toFixed(1)), ac = (m) => (m.acc == null ? "\u2013" : `${Math.round(m.acc * 100)}%`), yd = (m) => (m.long ? `${m.long} yd` : "\u2013");
+  return [{ label: "Fantasy pts/game", a: a.fpg, b: b.fpg, fa: f1(a.fpg), fb: f1(b.fpg) }, { label: "Kicks tried/game", a: a.apg, b: b.apg, fa: f1(a.apg), fb: f1(b.apg) },
+    { label: "FG accuracy", a: a.acc, b: b.acc, fa: ac(a), fb: ac(b), tol: 0.005 }, { label: "Longest", a: a.long || null, b: b.long || null, fa: yd(a), fb: yd(b) }];
+}
+
 // ---------------- season so far: the kick map
 export function kickMap(id, p) {
   if (!S.usage?.kickers) return ""; const me = findKicker(id, p);
@@ -92,5 +101,9 @@ export function kickerTeamMix(id, p) {
   if (!rows.length) return "";
   const max = Math.max(...rows.map((x) => x.pf), 1), PH = 110, hh = (v) => Math.round((v / max) * PH), kick = rows.reduce((a, x) => a + x.fg + x.xp, 0), all = rows.reduce((a, x) => a + x.pf, 0), att = rows.reduce((a, x) => a + x.att, 0);
   const cols = rows.map((x) => `<div class="pf-scol" role="img" aria-label="Week ${x.w}: ${x.pf} points, ${x.fg} from field goals, ${x.xp} from extra points, ${x.att} kicks tried"><b>${x.pf}</b><div class="pf-splot"><i class="td" style="height:${hh(Math.max(0, x.pf - x.fg - x.xp))}px"></i><i class="xp" style="height:${hh(x.xp)}px"></i><i class="fg" style="height:${hh(x.fg)}px"></i></div><span>W${x.w}</span><em>${x.att}</em></div>`).join("");
-  return sec("How his team scores", `<div class="panel"><div class="pf-stack">${cols}</div><p class="pf-cap" style="margin-top:4px">The bold number under each week is how many kicks he tried.</p><div class="pf-chips" style="margin-top:8px"><div class="pf-chip tone-g1"><span>${pct(kick, all)}% of the points</span><small>come off his kicks</small></div><div class="pf-chip tone-n"><span>${(att / rows.length).toFixed(1)} kicks a game</span><small>tried</small></div></div><p class="pf-cap"><span class="pf-key fg"></span> field goals &nbsp;<span class="pf-key xp"></span> extra points &nbsp;<span class="pf-key td"></span> touchdowns, two-pointers and defensive scores. A kicker scores when an offense <b>settles for three</b>: the more his team stalls near the goal line, the more he kicks.</p></div>`, "points by game");
+  const fgT = rows.reduce((a, x) => a + x.fg, 0), xpT = rows.reduce((a, x) => a + x.xp, 0), tdT = rows.reduce((a, x) => a + Math.max(0, x.pf - x.fg - x.xp), 0), tot = fgT + xpT + tdT;
+  const seg = (cls, v) => (v > 0 ? `<i class="${cls}" style="flex-grow:${v}"></i>` : ""), key = (cls, name, v) => `<span><span class="pf-key ${cls}"></span>${name} <b>${v}</b> <small>${Math.round((v / tot) * 100)}%</small></span>`;
+  // One bar for the season, in the app's standard 14px: where his team's points come from. The week-by-week stacks stay behind a fold for anyone who wants them.
+  const bar = `<div class="cbar" role="img" aria-label="Points by source this season, ${tot} in all: ${fgT} from field goals, ${xpT} from extra points, ${tdT} from touchdowns and other scores">${seg("fg", fgT)}${seg("xp", xpT)}${seg("td", tdT)}</div><div class="ckey">${key("fg", "Field goals", fgT)}${key("xp", "Extra points", xpT)}${key("td", "Touchdowns and other scores", tdT)}</div>`;
+  return sec("How his team scores", `<div class="panel">${bar}<div class="pf-chips" style="margin-top:12px"><div class="pf-chip tone-g1"><span>${pct(kick, all)}% of the points</span><small>come off his kicks</small></div><div class="pf-chip tone-n"><span>${(att / rows.length).toFixed(1)} kicks a game</span><small>tried</small></div></div><p class="pf-cap">A kicker scores when an offense <b>settles for three</b>: the more his team stalls near the goal line, the more he kicks. Touchdowns and other scores include two-pointers and defensive or special-teams scores.</p>${fold("kmix:games", "Game by game", `<div class="pf-stack">${cols}</div><p class="pf-cap" style="margin-top:4px">The bold number under each week is how many kicks he tried.</p>`)}</div>`, "points by source");
 }

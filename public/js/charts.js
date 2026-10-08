@@ -84,11 +84,11 @@ export function waterfall(rows) {
 }
 
 // ---------- Percentile bar (a stat, ranked among his position) ----------
-export function pctBar(label, pct, valueText, sub = "") {
+export function pctBar(label, pct, valueText, sub = "", rk = null) {
   if (pct == null) return "";
   const c = pct >= 80 ? "p5" : pct >= 60 ? "p4" : pct >= 40 ? "p3" : pct >= 20 ? "p2" : "p1";
   return `<div class="pct"><div class="pl">${label}${sub ? `<small>${sub}</small>` : ""}</div>
-    <div class="ptrack" role="img" aria-label="${esc(label)}: ${valueText}, ${pct}th percentile among his position"><i class="pk ${c}" style="left:${pct}%"><b>${pct}</b></i></div><div class="pv">${valueText}</div></div>`;
+    <div class="ptrack" role="img" aria-label="${esc(label)}: ${valueText}, ${rk ? `ranked ${rk.rank} of ${rk.n} at his position` : `${pct}th percentile among his position`}"><i class="pk ${c}${rk && rk.rank >= 100 ? " w3" : ""}" style="left:${pct}%"><b>${rk ? rk.rank : pct}</b></i></div><div class="pv">${valueText}</div></div>`;
 }
 
 // ---------- Slate map: every game by expected total and expected margin ----------
@@ -131,12 +131,12 @@ export function formStrip(log, xp, { weeks = null } = {}) {
   const gap = (W - L - R) / n;
   const bars = log.map((l, i) => {
     const x = L + i * gap + (gap - bw) / 2, [p, e] = vals[i], top = Y(Math.max(p, 0));
-    return `<rect class="fbar-s" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5, H - B - top).toFixed(1)}" rx="3"/>
+    return `<rect class="fbar-s${e != null && p >= e ? " hi" : ""}" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5, H - B - top).toFixed(1)}" rx="3"/>
       ${e != null ? `<line class="fexp" x1="${(x - 3).toFixed(1)}" x2="${(x + bw + 3).toFixed(1)}" y1="${Y(e).toFixed(1)}" y2="${Y(e).toFixed(1)}"/>` : ""}
       <text class="fv" x="${(x + bw / 2).toFixed(1)}" y="${(top - 3).toFixed(1)}" text-anchor="middle">${f0(p)}</text>
       <text class="ax" x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${l[0]}</text>`;
   }).join("");
-  return `<svg class="formstrip" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fantasy points by week, with the points his workload usually earns marked on each bar."><line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>${bars}</svg>`;
+  return `<svg class="formstrip" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fantasy points by week, with the points his workload usually earns marked on each bar. Bars at or above that mark are green."><line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>${bars}</svg>`;
 }
 
 // ---------- Running hot / cold: points scored against points the workload usually earns ----------
@@ -180,7 +180,7 @@ export function mirrorRows(rows, { ta = "", tb = "" } = {}) {
     if (r.max != null && both) { const sc = (v) => Math.max(0.03, Math.min(1, r.lowerBetter ? (r.n - v + 1) / r.n : (v - (r.min ?? 0)) / ((r.max - (r.min ?? 0)) || 1))); wa = sc(r.a); wb = sc(r.b); }
     const tick = (s) => (r.max != null && r.ref != null && both ? `<b class="ref" style="${s === "a" ? "right" : "left"}:${(100 * Math.max(0, Math.min(1, r.lowerBetter ? (r.n - r.ref + 1) / r.n : (r.ref - (r.min ?? 0)) / ((r.max - (r.min ?? 0)) || 1)))).toFixed(1)}%"></b>` : "");
     const bar = (s, w) => `<div class="mb ${s}${win(s) ? " win" : ""}">${both ? `<i style="width:${Math.max(3, w * 100).toFixed(1)}%"></i>${tick(s)}` : ""}</div>`;
-    return `<div class="mr"><div class="mv a${win("a") ? " win" : ""}">${fa}</div>${bar("a", wa)}<div class="ml">${r.label}</div>${bar("b", wb)}<div class="mv b${win("b") ? " win" : ""}">${fb}</div></div>`;
+    return `<div class="mr"><div class="mv a${win("a") ? " win" : ""}">${fa}</div>${bar("a", wa)}<div class="ml">${String(r.label).replace(/\//g, "/<wbr>")}</div>${bar("b", wb)}<div class="mv b${win("b") ? " win" : ""}">${fb}</div></div>`;
   }).join("")}</div>`;
 }
 

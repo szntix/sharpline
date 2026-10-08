@@ -5,7 +5,7 @@ import { SOURCES, S, computed, league, leagueOrDefault, pl } from "../state.js";
 import { MODEL } from "../coefs.js";
 import { xppr } from "../model.js";
 import { signals, statusText } from "../engine.js";
-import { esc, f1, f0, pct, percentile, kickoffText, posLabel, statusChip, posClass, teamStripe, emblem } from "../ui.js";
+import { esc, f1, f0, pct, percentile, rankIn, kickoffText, posLabel, statusChip, posClass, teamStripe, emblem } from "../ui.js";
 import { dotplot, dotCaption, axisMax, waterfall, pctBar, formStrip, rankRange, luck, proofDots } from "../charts.js";
 import { quantile } from "../engine.js";
 import { fold, mmHtml, loading, feedError, sec, noteList, SRC_NOTE } from "./shared.js";
@@ -99,10 +99,10 @@ export function viewPlayer(id) {
   let stands = "";
   if (u && u.n >= 3 && pos !== "K" && pos !== "DEF") {
     const pa = peerArrays(pos), bars = [];
-    if (pos !== "QB") bars.push(pctBar("Targets per game", percentile(pa.tgt, u.tgt), f1(u.tgt), "recent weighted"), pctBar("Target share", percentile(pa.ts, u.ts), pct(u.ts)));
-    if (pos === "RB" || pos === "QB") bars.push(pctBar("Carries per game", percentile(pa.car, u.car), f1(u.car)));
-    bars.push(pctBar("Points per game", percentile(pa.form, u.form), f1(u.form), "recent weighted"));
-    stands = sec(`Where he stands among ${posLabel(pos)}s`, bars.join("") + `<p class="small muted" style="margin-top:8px">Ranked against ${pa.form.length} ${posLabel(pos)}s with at least three games. The line in the middle is average.</p>`);
+    if (pos !== "QB") bars.push(pctBar("Targets per game", percentile(pa.tgt, u.tgt), f1(u.tgt), "recent weighted", rankIn(pa.tgt, u.tgt)), pctBar("Target share", percentile(pa.ts, u.ts), pct(u.ts), "", rankIn(pa.ts, u.ts)));
+    if (pos === "RB" || pos === "QB") bars.push(pctBar("Carries per game", percentile(pa.car, u.car), f1(u.car), "", rankIn(pa.car, u.car)));
+    bars.push(pctBar("Points per game", percentile(pa.form, u.form), f1(u.form), "recent weighted", rankIn(pa.form, u.form)));
+    stands = sec(`Where he stands among ${posLabel(pos)}s`, bars.join("") + `<p class="small muted" style="margin-top:8px">The number in each dot is his rank among ${pa.form.length} ${posLabel(pos)}s with at least three games (1 is best). The line in the middle is average.</p>`, `rank of ${pa.form.length}`);
   }
 
   // 4. Form vs workload
@@ -111,7 +111,7 @@ export function viewPlayer(id) {
     const xf = ["RB", "WR", "TE"].includes(pos) ? (t, c) => xppr(pos, t, c) : null;
     const gap = xf && u.g >= 2 ? u.form - xf(u.tgt, u.car) : null;
     form = sec("Recent games", `${formStrip(u.log, xf)}
-      <div class="legend"><span><i class="l-bar"></i>Fantasy points (PPR)</span>${xf ? `<span><i class="l-tick"></i>What that game's workload usually earns</span>` : ""}</div>
+      <div class="legend"><span><i class="l-bar"></i>Fantasy points (PPR)</span>${xf ? `<span><i class="l-tick"></i>What that game's workload usually earns</span><span><i class="l-bar hi"></i>At or above it</span>` : ""}</div>
       ${gap != null ? `<p style="margin-top:10px">${Math.abs(gap) < 2 ? "Scoring about what his workload earns." : gap > 0 ? `Scoring <b>${gap.toFixed(1)} a game more</b> than his workload usually earns, which tends to fade.` : `Scoring <b>${(-gap).toFixed(1)} a game less</b> than his workload usually earns, which tends to correct.`}</p>` : ""}`, u.ppg != null ? `${u.ppg} a game this season` : "");
   }
 
@@ -134,7 +134,11 @@ export function viewPlayer(id) {
       ${sg ? `<div class="callout ${used ? "" : "warn"}" style="margin-top:12px"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${proofDots(sg.years, { labels: MODEL.proof.years })} <b>${sg.years.filter(Boolean).length} of ${sg.years.length} tests</b></span><br>${used ? `Opponent rating improved our forecasts often enough for ${posLabel(pos)}s that it is included, with a small effect (${sg.avg}% lower error).` : `Opponent rating did not improve our forecasts reliably for ${posLabel(pos)}s, so it is shown here but <b>not used</b> in the projection. Treat it as background, not a prediction.`}</div>` : ""}`);
   }
   if (S.ui.src !== "blend" && built) built = built.replace("</header>", `</header><p class="callout small" style="margin:0 0 12px">The number at the top is ${SOURCES[S.ui.src]}'s${pr.srcMissing ? ", and he has none, so it is the Blended number" : ""}. The Blended number we recommend is ${f1(C.P0.proj[id]?.mean)}. The breakdown below explains the Blend.</p>`);
-  return feedError() + hero + teamStrip(p.t) + (pos === "DEF" ? defenseGate() : pos === "K" ? kickerGate() : teamsErrorGate()) + matchLine(id, C, p) + likely + notesSection(id, C) + advSection(id, p) + built + stands + experts + matchupSec + form + (pos === "DEF" ? defenseMatchup(p.t, pr) + defenseHow(p.t) + defenseStands(p.t) + defenseVsPositions(p.t) + defenseRecent(p.t) + scheduleSection(p.t, "defense") : pos === "K" ? kickerConditionsSec(id, p, pr) + kickerNumbers(id, p) + kickMap(id, p) + kickerTeamMix(id, p) + kickerHow(p.t, pr, L?.scoring || leagueOrDefault().scoring) + scheduleSection(p.t, "kicker") : playerTeamSections(id, p, u));
+  // The approved order, the same on every profile: A this week, B the number, C the season, D team context, E ahead. A section that does not apply to a position is simply empty.
+  const top = feedError() + hero + teamStrip(p.t) + (pos === "DEF" ? defenseGate() : pos === "K" ? kickerGate() : teamsErrorGate()) + matchLine(id, C, p) + likely + notesSection(id, C);
+  if (pos === "DEF") return top + defenseMatchup(p.t, pr) + built + experts + defenseHow(p.t) + defenseStands(p.t) + defenseRecent(p.t) + defenseVsPositions(p.t) + scheduleSection(p.t, "defense");
+  if (pos === "K") return top + kickerConditionsSec(id, p, pr) + built + experts + kickerNumbers(id, p) + kickMap(id, p) + kickerTeamMix(id, p) + kickerHow(p.t, pr, L?.scoring || leagueOrDefault().scoring) + scheduleSection(p.t, "kicker");
+  return top + matchupSec + built + experts + advSection(id, p) + stands + form + playerTeamSections(id, p, u);
 }
 
 function notesSection(id, C) {
